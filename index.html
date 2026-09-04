@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Liina juoksee Mascotiin</title>
+<meta name="description" content="Kolmen kaistan endless runner Lahden Rauhankadulla. Liina juoksee Museon edestä Mascotin ovelle, lehtori Tervis perässä.">
+<meta name="theme-color" content="#7cc4e4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Liina juoksee">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+    "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js",
+    "three/addons/exporters/OBJExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js",
+    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js"
+  },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT",
+    "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js": "sha384-4rziNxOBZKQ69i+w+f89KJ55TCYquwchVbByQwmaOeIOXdOU2PLDn3kOfXHwIJC9",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js": "sha384-nbwtoZENJD3Vq+ACK0CuGQdPMuDWHkamC2KJD70EV5nfg6jQjfppKOea07YJN+N3",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ"
+  }
+}
+</script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  html,body{
+    margin:0;height:100%;background:#7cc4e4;
+    font-family:Nunito,system-ui,sans-serif;
+    overflow:hidden;overscroll-behavior:none;
+    -webkit-text-size-adjust:100%;
+  }
+  /* Demon puhelinkehys on poistettu: pelissä #stage täyttää ruudun. */
+  #game{
+    position:fixed;inset:0;overflow:hidden;background:#7cc4e4;
+    user-select:none;-webkit-user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #stage{position:absolute;inset:0;touch-action:none}
+
+  .hud{position:absolute;pointer-events:none;color:#fff}
+  #tl{
+    left:calc(12px + env(safe-area-inset-left));
+    top:calc(12px + env(safe-area-inset-top));
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .pill{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:15px;background:rgba(14,20,32,.55);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18);backdrop-filter:blur(3px)}
+  .pill b{font:800 20px/1 'Baloo 2',Nunito,sans-serif}
+  .pill span{font:800 9px/1 Nunito,sans-serif;color:rgba(255,255,255,.72);letter-spacing:.08em}
+  .coin{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 34% 30%,#ffe484,#f7b500);box-shadow:0 0 0 2px #8a5a00}
+  #tr{
+    right:calc(12px + env(safe-area-inset-right));
+    top:calc(12px + env(safe-area-inset-top));
+    display:flex;flex-direction:column;align-items:flex-end;gap:6px;
+  }
+  #bot{
+    left:calc(12px + env(safe-area-inset-left));
+    right:calc(12px + env(safe-area-inset-right));
+    bottom:calc(14px + env(safe-area-inset-bottom));
+  }
+  #botrow{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:5px;font:800 10px/1 Nunito,sans-serif;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  #track{height:11px;border-radius:7px;background:rgba(14,20,32,.5);box-shadow:inset 0 0 0 2px rgba(255,255,255,.2);overflow:hidden}
+  #bar{height:100%;width:0;border-radius:7px;background:linear-gradient(90deg,#ff9433,#ffd60a);transition:width .2s linear}
+
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;background:linear-gradient(180deg,rgba(9,18,38,.12),rgba(9,18,38,.58));transition:opacity .35s;color:#fff;padding:0 22px;box-sizing:border-box}
+  .kicker{font:800 11px/1 Nunito,sans-serif;color:#ffd60a;letter-spacing:.32em}
+  .title{font:800 52px/.92 'Baloo 2',Nunito,sans-serif;text-shadow:0 5px 0 #c2410c,0 9px 0 rgba(0,0,0,.45)}
+  .btn{margin-top:6px;padding:13px 34px;border-radius:22px;background:linear-gradient(180deg,#ffd60a,#f7b500);box-shadow:0 5px 0 #b97f00,inset 0 2px 0 rgba(255,255,255,.5);font:800 20px/1 'Baloo 2',Nunito,sans-serif;color:#12305e}
+  .hint{font:600 11px/1.6 Nunito,sans-serif;color:rgba(255,255,255,.78)}
+
+  @media (prefers-reduced-motion: reduce){
+    #bar{transition:none}
+    .screen{transition:none}
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <div id="stage"></div>
+  <div class="hud" id="tl">
+    <div class="pill"><b id="score">0</b><span>PISTETTÄ</span></div>
+    <div class="pill"><i class="coin"></i><b id="coins" style="font-size:14px">0</b></div>
+  </div>
+  <div class="hud" id="tr">
+    <div class="pill" style="padding:5px 10px;gap:7px"><span style="letter-spacing:.06em">TERVIS</span><b id="gap" style="font-size:13px">2 s</b></div>
+    <div id="boost" style="padding:4px 10px;border-radius:12px;background:#ffd60a;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18);font:900 11px/1 Nunito,sans-serif;color:#12305e">x1</div>
+  </div>
+  <div class="hud" id="bot">
+    <div id="botrow"><span>MUSEO</span><span id="meters">900 m → MASCOT</span></div>
+    <div id="track"><div id="bar"></div></div>
+  </div>
+  <div class="screen" id="intro">
+    <div class="kicker">LAHTI · RAUHANKATU</div>
+    <div class="title">LIINA<br>JUOKSEE</div>
+    <div class="hint">Museon edestä Mascotin ovelle</div>
+    <div class="btn">JUOKSE!</div>
+    <div class="hint">napauta / väli · nuolet vasen–oikea · ylös hyppy</div>
+  </div>
+  <div class="screen" id="over" style="opacity:0;pointer-events:none">
+    <div class="kicker">JÄÄT JÄLKEEN</div>
+    <div class="title" style="font-size:38px">TERVIS<br>SAI KIINNI</div>
+    <div class="hint" id="overText"></div>
+    <div class="btn">UUDESTAAN</div>
+  </div>
+</div>
+<script type="module" src="liina-scene.js"></script>
+</body>
+</html>

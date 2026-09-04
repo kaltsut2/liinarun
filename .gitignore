@@ -1,0 +1,5 @@
+.DS_Store
+
+# Paikallinen esikatselukonfiguraatio, ei jaeta. Skill kuuluu repoon.
+.claude/launch.json
+.claude/settings.local.json
