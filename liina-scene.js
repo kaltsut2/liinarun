@@ -774,7 +774,7 @@ const ui = {
 function start() {
   cars.forEach((c, i) => { if (c.position.z > -60) { c.userData.lane = startLanes[i]; c.position.set(startLanes[i] * LANE_W, 0, -80 - i * 32); } });
   ui.intro.style.opacity = '0';
-  ui.intro.style.pointerEvents = 'none';
+  ui.intro.classList.add('pois');
   S.started = true;
 }
 function reset() {
@@ -783,7 +783,7 @@ function reset() {
   cans.forEach((c, i) => { c.position.z = -60 - i * 120; c.visible = true; }); S.y = 0; S.vy = 0;
   cars.forEach((c, i) => { c.userData.lane = startLanes[i]; c.position.set(startLanes[i] * LANE_W, 0, -80 - i * 32); });
   coins.forEach((c, i) => { c.position.z = -8 - i * 5; c.visible = true; });
-  ui.over.style.opacity = '0'; ui.over.style.pointerEvents = 'none';
+  ui.over.style.opacity = '0'; ui.over.classList.add('pois');
   S.started = true;
 }
 
@@ -803,8 +803,15 @@ addEventListener('keydown', e => {
   else if (e.key === 'Enter') { if (!S.started) start(); else if (S.over) reset(); }
 });
 
+/* Ruutujen painikkeet: napautus toimii myös kosketuksella, ei vain näppäimistöllä. */
+function aloitaTaiJatka() { if (!S.started) start(); else if (S.over) reset(); }
+document.querySelectorAll('.screen .btn').forEach(b => {
+  b.addEventListener('click', e => { e.preventDefault(); aloitaTaiJatka(); });
+});
+
 let touch = null;
 host.addEventListener('pointerdown', e => { touch = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+host.addEventListener('pointercancel', () => { touch = null; });
 host.addEventListener('pointerup', e => {
   if (!touch) return;
   const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
@@ -909,7 +916,7 @@ function tick() {
     for (const c of cars) {
       if (Math.abs(c.position.z) < (c.userData.len || 4.6) / 2 + 0.5 && Math.abs(c.position.x - S.laneX) < 1.2 && S.y < 1.5) {
         S.over = true; S.shake = 0.5;
-        ui.over.style.opacity = '1'; ui.over.style.pointerEvents = 'auto';
+        ui.over.style.opacity = '1'; ui.over.classList.remove('pois');
         ui.overText.textContent = 'Tervis sai kiinni · ' + Math.round(S.dist) + '\u00a0m';
         break;
       }

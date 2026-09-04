@@ -67,11 +67,18 @@
   #track{height:11px;border-radius:7px;background:rgba(14,20,32,.5);box-shadow:inset 0 0 0 2px rgba(255,255,255,.2);overflow:hidden}
   #bar{height:100%;width:0;border-radius:7px;background:linear-gradient(90deg,#ff9433,#ffd60a);transition:width .2s linear}
 
-  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;background:linear-gradient(180deg,rgba(9,18,38,.12),rgba(9,18,38,.58));transition:opacity .35s;color:#fff;padding:0 22px;box-sizing:border-box}
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;background:linear-gradient(180deg,rgba(9,18,38,.12),rgba(9,18,38,.58));transition:opacity .35s;color:#fff;padding:0 22px;box-sizing:border-box;pointer-events:none}
   .kicker{font:800 11px/1 Nunito,sans-serif;color:#ffd60a;letter-spacing:.32em}
   .title{font:800 52px/.92 'Baloo 2',Nunito,sans-serif;text-shadow:0 5px 0 #c2410c,0 9px 0 rgba(0,0,0,.45)}
   .btn{margin-top:6px;padding:13px 34px;border-radius:22px;background:linear-gradient(180deg,#ffd60a,#f7b500);box-shadow:0 5px 0 #b97f00,inset 0 2px 0 rgba(255,255,255,.5);font:800 20px/1 'Baloo 2',Nunito,sans-serif;color:#12305e}
+  .btn:active{transform:translateY(2px);box-shadow:0 3px 0 #b97f00,inset 0 2px 0 rgba(255,255,255,.5)}
+  .btn:focus-visible{outline:3px solid #fff;outline-offset:3px}
   .hint{font:600 11px/1.6 Nunito,sans-serif;color:rgba(255,255,255,.78)}
+
+  /* Ruudun tausta ei nappaa kosketusta, jotta napautus menee pelille asti.
+     Vain näkyvissä olevan ruudun painike ottaa syötteen vastaan. */
+  .screen .btn{pointer-events:auto;cursor:pointer}
+  .screen.pois .btn{pointer-events:none}
 
   @media (prefers-reduced-motion: reduce){
     #bar{transition:none}
@@ -101,7 +108,7 @@
     <div class="btn">JUOKSE!</div>
     <div class="hint">napauta / väli · nuolet vasen–oikea · ylös hyppy</div>
   </div>
-  <div class="screen" id="over" style="opacity:0;pointer-events:none">
+  <div class="screen pois" id="over" style="opacity:0">
     <div class="kicker">JÄÄT JÄLKEEN</div>
     <div class="title" style="font-size:38px">TERVIS<br>SAI KIINNI</div>
     <div class="hint" id="overText"></div>

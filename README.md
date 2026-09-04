@@ -31,6 +31,24 @@ selitepaneeli poistettu, `#stage` täyttää ruudun, HUD:n marginaaleihin lisät
 `env(safe-area-inset-*)` puhelimen lovea varten. HUD:n rakenne, typografia ja
 komponentit ovat `handoff/UI.md`:n mukaiset sellaisenaan.
 
+## Kosketusohjaus
+
+Aloitus- ja game over -ruutu peittävät koko alan, ja demossa ne ottivat
+`pointer-events`illa kaikki osoitintapahtumat itselleen. Kosketus ei siis
+koskaan tavoittanut `#stage`:a, eikä peliä voinut käynnistää puhelimella
+lainkaan — näppäimistöllä kyllä. Korjaus:
+
+- `.screen` on `pointer-events:none`, joten napautus menee pelille asti
+- `.screen .btn` on `pointer-events:auto` ja painikkeilla on oma
+  click-käsittelijä, joten myös itse nappia voi painaa
+- piilotettu ruutu saa luokan `pois`, joka tekee sen painikkeesta
+  läpinäkymättömän syötteelle — muuten näkymätön nappi söisi napautuksia
+  kesken pelin
+- `pointercancel` nollaa kesken jääneen pyyhkäisyn
+
+Ohjaus on tarkoituksella pelkkä pyyhkäisy ja näppäimistö: ruudulla ei ole
+painettavia nuolia.
+
 ## Ennen kuin muutat mitään
 
 Lue `.claude/skills/liina-escape/SKILL.md` ja `handoff/STYLE_CONTRACT.md`.
