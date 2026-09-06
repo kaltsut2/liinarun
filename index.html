@@ -75,6 +75,43 @@
   .btn:focus-visible{outline:3px solid #fff;outline-offset:3px}
   .hint{font:600 11px/1.6 Nunito,sans-serif;color:rgba(255,255,255,.78)}
 
+  /* Potkulaudan aktivointinappi. Neliö kun lataus on varastossa; aktivoituna
+     reunat pyöristyvät ympyräksi ja limenvihreä viiva kuluu kellon lailla. */
+  #scoot{
+    right:calc(12px + env(safe-area-inset-right));
+    bottom:calc(58px + env(safe-area-inset-bottom));
+    width:66px;height:66px;padding:0;margin:0;border:0;
+    -webkit-appearance:none;appearance:none;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:17px;
+    background:rgba(14,20,32,.55);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.18);
+    backdrop-filter:blur(3px);
+    color:#fff;pointer-events:auto;touch-action:manipulation;cursor:pointer;
+    transition:border-radius .3s ease, transform .1s ease, opacity .25s ease;
+  }
+  #scoot.tyhja{opacity:.38;pointer-events:none}
+  #scoot.aktiivinen{border-radius:50%}
+  #scoot:active{transform:scale(.94)}
+  #scoot:focus-visible{outline:3px solid #76c043;outline-offset:3px}
+  #scootIkoni{width:40px;height:40px;display:block}
+  #scoot.aktiivinen #scootIkoni{color:#76c043}
+  #scootN{
+    position:absolute;top:-6px;right:-6px;
+    min-width:21px;height:21px;box-sizing:border-box;padding:0 5px;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:11px;background:#76c043;color:#12305e;
+    font:800 12px/1 'Baloo 2',Nunito,sans-serif;
+    box-shadow:0 0 0 2px rgba(14,20,32,.7);
+  }
+  #scoot.aktiivinen #scootN{opacity:0}
+  #scootKello{
+    position:absolute;inset:0;width:100%;height:100%;
+    transform:rotate(-90deg);opacity:0;transition:opacity .2s ease;
+  }
+  #scoot.aktiivinen #scootKello{opacity:1}
+  #scootKello circle{fill:none;stroke:#76c043;stroke-width:5;stroke-linecap:round}
+
   /* Ruudun tausta ei nappaa kosketusta, jotta napautus menee pelille asti.
      Vain näkyvissä olevan ruudun painike ottaa syötteen vastaan. */
   .screen .btn{pointer-events:auto;cursor:pointer}
@@ -101,6 +138,16 @@
     <div id="botrow"><span>MUSEO</span><span id="meters">900 m → MASCOT</span></div>
     <div id="track"><div id="bar"></div></div>
   </div>
+  <button class="hud tyhja" id="scoot" aria-label="Aktivoi potkulauta">
+    <svg id="scootKello" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="45"/></svg>
+    <svg id="scootIkoni" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="34" r="6.5"/>
+      <circle cx="37" cy="34" r="6.5"/>
+      <path d="M18.5 34h12.5l6-19"/>
+      <path d="M33 13h9"/>
+    </svg>
+    <b id="scootN">0</b>
+  </button>
   <div class="screen" id="intro">
     <div class="kicker">LAHTI · RAUHANKATU</div>
     <div class="title">LIINA<br>JUOKSEE</div>

@@ -192,6 +192,137 @@ for (const s of [-1, 1]) {
   sides.push(arr);
 }
 
+/* ---------- Rauhankadun liikkeet ----------
+   Antonio ja Ajomessi ovat kulkusuunnassa vasemmalla. Ne rakennetaan vasemman
+   poolin paikalle 3, joten ne eivät rakenteellisesti voi päätyä oikealle laidalle.
+   Kyltit ulkonevat seinästä kadulle ja katsovat +z eli tulijaa kohti — tasossa
+   seinässä ne jäisivät liian viistoon luettaviksi. */
+
+function antonioTex() {
+  return canvasTex(512, 512, (g, w, h) => {
+    g.fillStyle = '#2f333a'; g.fillRect(0, 0, w, h);
+    /* pizzapala */
+    g.fillStyle = '#e3c67e';
+    g.beginPath(); g.moveTo(256, 60); g.lineTo(196, 175); g.lineTo(316, 175); g.closePath(); g.fill();
+    g.fillStyle = '#b0523a';
+    for (const [x, y, r] of [[232, 118, 8], [274, 128, 7], [252, 152, 9], [292, 158, 6]]) {
+      g.beginPath(); g.arc(x, y, r, 0, 6.2832); g.fill();
+    }
+    /* nimi */
+    g.fillStyle = '#f0ece0';
+    g.font = "800 96px 'Baloo 2', Nunito, sans-serif";
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('ANTONIO', 256, 250);
+    g.fillStyle = '#e3c67e';
+    g.font = "800 40px Nunito, sans-serif";
+    g.fillText('KEBAB & PIZZERIA', 256, 330);
+    g.font = "800 30px Nunito, sans-serif";
+    g.fillText('SINCE 1992', 256, 386);
+    /* sisäkehä */
+    g.strokeStyle = '#f0ece0'; g.lineWidth = 5;
+    g.beginPath(); g.arc(256, 256, 226, 0, 6.2832); g.stroke();
+  });
+}
+
+function ajomessiTex() {
+  return canvasTex(512, 256, (g, w, h) => {
+    g.fillStyle = '#1f7ec8'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#f0ece0';
+    g.font = "800 34px Nunito, sans-serif";
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('LIIKENNEKOULU', 256, 52);
+    g.fillStyle = '#f7f8f8';
+    g.font = "800 92px 'Baloo 2', Nunito, sans-serif";
+    g.fillText('AJOMESSI', 256, 130);
+    /* ohjauspyörä */
+    g.strokeStyle = '#f7f8f8'; g.lineWidth = 9;
+    g.beginPath(); g.arc(256, 205, 30, 0, 6.2832); g.stroke();
+    g.beginPath(); g.arc(256, 205, 9, 0, 6.2832); g.stroke();
+    for (const a of [-2.6, -0.55, 1.57]) {
+      g.beginPath(); g.moveTo(256 + Math.cos(a) * 9, 205 + Math.sin(a) * 9);
+      g.lineTo(256 + Math.cos(a) * 30, 205 + Math.sin(a) * 30); g.stroke();
+    }
+  });
+}
+
+/* ulkoneva kyltti: varsi seinästä + levy joka katsoo tulijaa kohti */
+function ulokeVarsi(x, y) {
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 1.7, 8), MAT.slate);
+  arm.rotation.z = Math.PI / 2;
+  arm.position.set(x, y, 0);
+  return arm;
+}
+
+function antonioTalo() {
+  const g = new THREE.Group();
+  g.add(blockBuilding({
+    w: 11, h: 11, d: 10,
+    tex: facadeTex('#b0523a', '#e8e2d2', '#617586', 3, 4),
+    roof: MAT.brickDark
+  }));
+  const seina = 11 / 2;
+  const lasi = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.0, 8.2), MAT.glassDark);
+  lasi.position.set(seina + 0.03, 1.7, 0); g.add(lasi);
+  const markiisi = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 8.6), MAT.brickDark);
+  markiisi.position.set(seina + 0.55, 3.5, 0); g.add(markiisi);
+
+  g.add(ulokeVarsi(seina + 0.85, 6.6));
+  const keha = new THREE.Mesh(new THREE.CylinderGeometry(1.86, 1.86, 0.3, 32), MAT.brick);
+  keha.rotation.x = Math.PI / 2;
+  keha.position.set(seina + 1.7, 6.6, 0);
+  keha.castShadow = true; g.add(keha);
+  const naamio = new THREE.Mesh(new THREE.CircleGeometry(1.63, 32),
+    new THREE.MeshBasicMaterial({ map: antonioTex() }));
+  naamio.position.set(seina + 1.7, 6.6, 0.32); g.add(naamio);
+  return g;
+}
+
+function ajomessiTalo() {
+  const g = new THREE.Group();
+  g.add(blockBuilding({
+    w: 12, h: 12, d: 10,
+    tex: facadeTex('#d8d2c2', '#ffffff', '#4f6272', 4, 4),
+    roof: toon(0x7d8794)
+  }));
+  const seina = 12 / 2;
+  const lasi = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.8, 7.6), MAT.glassDark);
+  lasi.position.set(seina + 0.03, 1.6, 0); g.add(lasi);
+
+  g.add(ulokeVarsi(seina + 0.85, 6.2));
+  const laatikko = new THREE.Mesh(new THREE.BoxGeometry(0.34, 1.7, 3.4), MAT.busBlue);
+  laatikko.position.set(seina + 1.75, 6.2, 0);
+  laatikko.castShadow = true; g.add(laatikko);
+  const kilpi = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 1.65),
+    new THREE.MeshBasicMaterial({ map: ajomessiTex() }));
+  kilpi.position.set(seina + 1.75, 6.2, 1.87); g.add(kilpi);
+  return g;
+}
+
+/* vasemman poolin paikka 3 vaihtuu liikkeeksi tai tavalliseksi kortteliksi */
+const LIIKE_SLOT = 3;
+const liikeSlot = new THREE.Group();
+const liikeMuodot = [
+  { nimi: 'tyhja', paino: 0.42, ryhma: buildingRecipes[3]() },
+  { nimi: 'antonio', paino: 0.34, ryhma: antonioTalo() },
+  { nimi: 'ajomessi', paino: 0.24, ryhma: ajomessiTalo() }
+];
+for (const m of liikeMuodot) { m.ryhma.visible = false; liikeSlot.add(m.ryhma); }
+
+function valitseLiike() {
+  let r = Math.random(), valittu = liikeMuodot[0];
+  for (const m of liikeMuodot) { if (r < m.paino) { valittu = m; break; } r -= m.paino; }
+  for (const m of liikeMuodot) m.ryhma.visible = (m === valittu);
+}
+valitseLiike();
+
+{
+  const vanha = sides[0][LIIKE_SLOT];
+  liikeSlot.position.copy(vanha.position);
+  world.remove(vanha);
+  world.add(liikeSlot);
+  sides[0][LIIKE_SLOT] = liikeSlot;
+}
+
 /* trees between buildings */
 function tree() {
   const g = new THREE.Group();
@@ -391,6 +522,7 @@ MAT.pinkShoe = toon(0xe98aa2);
 MAT.copper = toon(0xc2551d);
 MAT.sweater = toon(0xa9c6dd);
 MAT.hairShort = toon(0x6f6357);
+MAT.scootLime = toon(0x76c043);   /* Ryden limenvihreä, varattu korostus */
 
 function makeRunner(o) {
   const g = new THREE.Group();
@@ -567,9 +699,14 @@ function makeBus() {
   screen.position.set(0, 2.32, L + 0.14); g.add(screen);
   const apron = new THREE.Mesh(new THREE.BoxGeometry(W - 0.16, 1.0, 0.34), MAT.busBlue);
   apron.position.set(0, 0.86, L + 0.12); g.add(apron);
-  const dest = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.44),
+  /* Määränpääkilpi tuulilasin yläosaan. Taso oli aiemmin y 3.12 eli täsmälleen
+     tuulilasilaatikon yläreunassa ja z L+0.2 eli laatikon syvyyden sisällä, jolloin
+     alapuolisko hautautui lasiin ja teksti katkesi vaakasuorasti. Nyt taso on
+     kokonaan lasin korkeudella ja sen etupinnan edessä. Koko 1.8 × 0.56 vastaa
+     tekstuurin 512 × 160 kuvasuhdetta, joten kirjaimet eivät veny. */
+  const dest = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.56),
     new THREE.MeshBasicMaterial({ map: signTex('AGT', '#14171c', '#ffd60a') }));
-  dest.position.set(0, 3.12, L + 0.2); g.add(dest);
+  dest.position.set(0, 2.82, L + 0.41); g.add(dest);
   const door = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.9, 1.1), MAT.busDeep);
   door.position.set(W / 2 + 0.02, 1.5, L - 2.2); g.add(door);
 
@@ -741,6 +878,93 @@ for (let i = 0; i < 3; i++) {
   cans.push(tilt);
 }
 
+/* ---------- sähköpotkulauta ---------- */
+/* Rakennetaan keula +z:hen kuten ajoneuvot, ja käännetään ulompi ryhmä niin
+   että keula osoittaa -z eli samaan suuntaan kuin Liina juoksee. */
+function makeScooter() {
+  const ulko = new THREE.Group();
+  const g = new THREE.Group();
+
+  /* kansi: limenvihreä runko, musta pitopinta päällä */
+  const deck = extrudeBody([
+    [0.86, 0.26], [0.94, 0.17], [0.80, 0.09],
+    [-0.78, 0.09], [-0.92, 0.18], [-0.84, 0.26]
+  ], 0.52, MAT.scootLime, 0.05);
+  deck.position.y = 0.05; g.add(deck);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.04, 1.44), MAT.tyre);
+  grip.position.set(0, 0.33, -0.03); g.add(grip);
+
+  /* kaulaputki nojaa taaksepäin kannen ylle */
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.062, 1.46, 14), MAT.scootLime);
+  stem.position.set(0, 1.02, 0.68); stem.rotation.x = 0.17; stem.castShadow = true; g.add(stem);
+  for (const [y, z, h] of [[0.52, 0.74, 0.11], [1.30, 0.61, 0.09]]) {
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.068, h, 14), MAT.slate);
+    band.position.set(0, y, z); band.rotation.x = 0.17; g.add(band);
+  }
+
+  /* ohjaustanko, kahvat ja mittari */
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 1.16, 12), MAT.slate);
+  bar.rotation.z = Math.PI / 2; bar.position.set(0, 1.68, 0.50); g.add(bar);
+  for (const sx of [-1, 1]) {
+    const grip2 = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.22, 12), MAT.tyre);
+    grip2.rotation.z = Math.PI / 2; grip2.position.set(sx * 0.46, 1.68, 0.50); g.add(grip2);
+    const lever = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.16, 8), MAT.slate);
+    lever.rotation.set(0.4, 0, Math.PI / 2); lever.position.set(sx * 0.30, 1.62, 0.41); g.add(lever);
+  }
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.14, 0.11), MAT.slate);
+  head.position.set(0, 1.60, 0.58); g.add(head);
+
+  /* pyörät, navat ja lokasuojat */
+  for (const [z, r] of [[0.92, 0.30], [-0.86, 0.32]]) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.15, 20), MAT.tyre);
+    w.rotation.z = Math.PI / 2; w.position.set(0, r, z); w.castShadow = true; g.add(w);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.42, r * 0.42, 0.16, 14), MAT.chrome);
+    hub.rotation.z = Math.PI / 2; hub.position.set(0, r, z); g.add(hub);
+    const guard = new THREE.Mesh(new THREE.TorusGeometry(r + 0.07, 0.07, 6, 16, Math.PI * 0.85), MAT.slate);
+    guard.rotation.y = Math.PI / 2; guard.rotation.z = Math.PI * 0.09;
+    guard.position.set(0, r, z); g.add(guard);
+  }
+
+  /* kypärä roikkuu kaulaputkessa ja heijastin keulassa */
+  const helmet = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), MAT.slate);
+  helmet.rotation.set(0.3, 0, 0.35); helmet.position.set(0.17, 0.86, 0.60); g.add(helmet);
+  const refl = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.10, 0.03), MAT.yellowGlow);
+  refl.position.set(0, 0.62, 0.79); g.add(refl);
+
+  ulko.rotation.y = Math.PI;      /* keula -z:hen */
+  ulko.add(g);
+  return ulko;
+}
+
+/* Liinan alla oleva ajokappale */
+const RIDE_K = 1.2;                 /* ajokappaleen mittakaava */
+const RIDE_H = 0.35 * RIDE_K;       /* kannen pinta = Liinan seisontakorkeus */
+const rideScoot = makeScooter();
+rideScoot.scale.setScalar(RIDE_K);
+rideScoot.position.y = -RIDE_H;
+rideScoot.visible = false;
+liina.group.add(rideScoot);
+
+/* kaistalta poimittavat, samalla koneistolla kuin NOCCO-tölkki */
+const scoots = [];
+for (let i = 0; i < 3; i++) {
+  const tilt = new THREE.Group();
+  tilt.rotation.z = 0.52;
+  const sc = makeScooter();
+  sc.scale.setScalar(0.70);
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.055, 8, 28),
+    new THREE.MeshBasicMaterial({ color: 0x76c043 }));
+  halo.rotation.x = Math.PI / 2;
+  const hehku = new THREE.Mesh(new THREE.SphereGeometry(0.98, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0x76c043, transparent: true, opacity: 0.13, depthWrite: false }));
+  tilt.add(sc, halo, hehku);
+  tilt.position.set(((i * 2) % 3 - 1) * LANE_W, 1.15, -110 - i * 150);
+  tilt.userData.spin = sc;
+  scene.add(tilt);
+  scoots.push(tilt);
+}
+
 /* ---------- coins ---------- */
 const coinGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.1, 18);
 const coins = [];
@@ -756,7 +980,10 @@ for (let i = 0; i < 26; i++) {
 /* ---------- state ---------- */
 const S = {
   started: false, over: false, speed: 16, dist: 0, score: 0, coins: 0,
-  lane: 0, laneX: 0, y: 0, vy: 0, jumping: false, t: 0, shake: 0, gap: 12.5, boost: 0
+  lane: 0, laneX: 0, y: 0, vy: 0, jumping: false, t: 0, shake: 0, gap: 12.5, boost: 0,
+  scoots: 0,       /* varastossa olevat potkulaudat */
+  ride: 0,         /* aktiivisen kyydin sekunnit jäljellä */
+  rideGrace: 0     /* lyhyt suoja kyydin päätyttyä, ettei sama auto osu heti uudelleen */
 };
 
 const ui = {
@@ -766,6 +993,9 @@ const ui = {
   bar: document.getElementById('bar'),
   gap: document.getElementById('gap'),
   boost: document.getElementById('boost'),
+  scootBtn: document.getElementById('scoot'),
+  scootN: document.getElementById('scootN'),
+  scootRing: document.querySelector('#scootKello circle'),
   intro: document.getElementById('intro'),
   over: document.getElementById('over'),
   overText: document.getElementById('overText')
@@ -780,6 +1010,8 @@ function start() {
 function reset() {
   S.over = false; S.speed = 16; S.dist = 0; S.score = 0; S.coins = 0;
   S.lane = 0; S.laneX = 0; S.gap = 12.5; S.boost = 0;
+  S.scoots = 0; S.ride = 0; S.rideGrace = 0;
+  scoots.forEach((t, i) => { t.position.z = -110 - i * 150; t.visible = true; });
   cans.forEach((c, i) => { c.position.z = -60 - i * 120; c.visible = true; }); S.y = 0; S.vy = 0;
   cars.forEach((c, i) => { c.userData.lane = startLanes[i]; c.position.set(startLanes[i] * LANE_W, 0, -80 - i * 32); });
   coins.forEach((c, i) => { c.position.z = -8 - i * 5; c.visible = true; });
@@ -802,6 +1034,15 @@ addEventListener('keydown', e => {
   else if (e.key === 'ArrowUp' || e.key === ' ' || e.key === 'w') { e.preventDefault(); if (!S.started) start(); else if (S.over) reset(); else jump(); }
   else if (e.key === 'Enter') { if (!S.started) start(); else if (S.over) reset(); }
 });
+
+/* Potkulaudan aktivointi: kuluttaa yhden varastosta ja antaa 10 sekunnin kyydin. */
+function kaytaScootti() {
+  if (!S.started || S.over || S.ride > 0 || S.scoots <= 0) return;
+  S.scoots--; S.ride = 10;
+}
+if (ui.scootBtn) {
+  ui.scootBtn.addEventListener('click', e => { e.preventDefault(); kaytaScootti(); });
+}
 
 /* Ruutujen painikkeet: napautus toimii myös kosketuksella, ei vain näppäimistöllä. */
 function aloitaTaiJatka() { if (!S.started) start(); else if (S.over) reset(); }
@@ -832,9 +1073,12 @@ function resize() {
 new ResizeObserver(resize).observe(host);
 resize();
 
-function recycle(arr, len, s) {
+function recycle(arr, len, onWrap) {
   for (const b of arr) {
-    if (b.position.z > 26) b.position.z -= len;
+    if (b.position.z > 26) {
+      b.position.z -= len;
+      if (onWrap) onWrap(b);
+    }
   }
 }
 
@@ -855,7 +1099,7 @@ function tick() {
   /* scroll world */
   for (const b of sides[0]) b.position.z += v * dt;
   for (const b of sides[1]) b.position.z += v * dt;
-  recycle(sides[0], POOL * SPACING);
+  recycle(sides[0], POOL * SPACING, b => { if (b === liikeSlot) valitseLiike(); });
   recycle(sides[1], POOL * SPACING);
   for (const t of trees) { t.position.z += v * dt; if (t.position.z > 26) t.position.z -= 6 * 26; }
   for (const d of dashes) { d.position.z += v * dt; if (d.position.z > 12) d.position.z -= 46 * 6; }
@@ -876,6 +1120,19 @@ function tick() {
     }
   }
 
+  /* potkulaudat kaistalla: sama kierrätys ja poiminta kuin tölkillä */
+  for (const t of scoots) {
+    t.position.z += v * dt;
+    t.userData.spin.rotation.y += dt * 5.2;
+    if (t.position.z > 16) {
+      t.position.z -= 420; t.visible = true;
+      t.position.x = (Math.floor(Math.random() * 3) - 1) * LANE_W;
+    }
+    if (t.visible && Math.abs(t.position.z) < 1.6 && Math.abs(t.position.x - S.laneX) < 1.2 && S.y < 1.8) {
+      t.visible = false; S.scoots++; S.score += 75;
+    }
+  }
+
   /* coins */
   for (const c of coins) {
     c.position.z += v * dt;
@@ -892,15 +1149,39 @@ function tick() {
     S.vy -= 26 * dt; S.y += S.vy * dt;
     if (S.y <= 0) { S.y = 0; S.vy = 0; S.jumping = false; }
   }
+  if (S.ride > 0) {
+    S.ride = Math.max(0, S.ride - dt);
+    if (S.ride === 0) S.rideGrace = 0.6;
+  }
+  if (S.rideGrace > 0) S.rideGrace = Math.max(0, S.rideGrace - dt);
+
   const runPhase = S.t * (S.started && !S.over ? 13 : 5);
   const swing = Math.sin(runPhase);
-  liina.group.position.set(S.laneX, S.y, 0);
-  liina.group.rotation.z = (S.lane * LANE_W - S.laneX) * -0.06;
-  liina.legs[0].rotation.x = swing * 1.05;
-  liina.legs[1].rotation.x = -swing * 1.05;
-  liina.arms[0].rotation.x = -swing * 0.95;
-  liina.arms[1].rotation.x = swing * 0.95;
-  liina.group.position.y += Math.abs(Math.cos(runPhase)) * 0.07;
+  const riding = S.ride > 0;
+  rideScoot.visible = riding;
+  const lean = (S.lane * LANE_W - S.laneX) * -0.06;
+
+  if (riding) {
+    /* lievä aaltomainen mutkittelu kaistan sisällä, ei vaikuta kaistalogiikkaan */
+    const w = Math.sin(S.t * 2.6);
+    liina.group.position.set(S.laneX + w * 0.26, S.y + RIDE_H, 0);
+    liina.group.rotation.z = lean + Math.cos(S.t * 2.6) * -0.06;
+    /* jalat kannella, toinen hieman edessä */
+    liina.legs[0].rotation.x = 0.22; liina.legs[0].rotation.z = 0.07;
+    liina.legs[1].rotation.x = -0.14; liina.legs[1].rotation.z = -0.07;
+    /* kädet ojentuvat eteen ohjaustangon kahvoille */
+    liina.arms[0].rotation.x = 1.27; liina.arms[0].rotation.z = 0.21;
+    liina.arms[1].rotation.x = 1.27; liina.arms[1].rotation.z = -0.21;
+    rideScoot.rotation.y = Math.PI + Math.cos(S.t * 2.6) * 0.10;
+  } else {
+    liina.group.position.set(S.laneX, S.y, 0);
+    liina.group.rotation.z = lean;
+    liina.legs[0].rotation.x = swing * 1.05; liina.legs[0].rotation.z = 0;
+    liina.legs[1].rotation.x = -swing * 1.05; liina.legs[1].rotation.z = 0;
+    liina.arms[0].rotation.x = -swing * 0.95; liina.arms[0].rotation.z = 0;
+    liina.arms[1].rotation.x = swing * 0.95; liina.arms[1].rotation.z = 0;
+    liina.group.position.y += Math.abs(Math.cos(runPhase)) * 0.07;
+  }
 
   const tSwing = Math.sin(runPhase * 0.92 + 1.2);
   tervis.group.position.z = S.over ? Math.max(3.4, tervis.group.position.z - dt * 5) : S.gap;
@@ -912,12 +1193,17 @@ function tick() {
   tervis.group.position.y = Math.abs(Math.cos(runPhase * 0.92)) * 0.06;
 
   /* collisions */
-  if (S.started && !S.over) {
+  if (S.started && !S.over && S.rideGrace <= 0) {
     for (const c of cars) {
       if (Math.abs(c.position.z) < (c.userData.len || 4.6) / 2 + 0.5 && Math.abs(c.position.x - S.laneX) < 1.2 && S.y < 1.5) {
-        S.over = true; S.shake = 0.5;
-        ui.over.style.opacity = '1'; ui.over.classList.remove('pois');
-        ui.overText.textContent = 'Tervis sai kiinni · ' + Math.round(S.dist) + '\u00a0m';
+        if (S.ride > 0) {
+          /* potkulauta on lisäelämä: kyyti katkeaa, peli jatkuu */
+          S.ride = 0; S.rideGrace = 1.2; S.shake = 0.3;
+        } else {
+          S.over = true; S.shake = 0.5;
+          ui.over.style.opacity = '1'; ui.over.classList.remove('pois');
+          ui.overText.textContent = 'Tervis sai kiinni · ' + Math.round(S.dist) + '\u00a0m';
+        }
         break;
       }
     }
@@ -957,6 +1243,16 @@ function tick() {
       ui.boost.style.background = S.boost > 0 ? '#f2600c' : '#ffd60a';
       ui.boost.style.color = S.boost > 0 ? '#fff' : '#12305e';
     }
+    if (ui.scootN) {
+      ui.scootN.textContent = S.scoots;
+      ui.scootBtn.classList.toggle('tyhja', S.scoots <= 0 && S.ride <= 0);
+      ui.scootBtn.classList.toggle('aktiivinen', S.ride > 0);
+      if (S.ride > 0 && ui.scootRing) {
+        const KEHA = 2 * Math.PI * 45;
+        ui.scootRing.style.strokeDasharray = KEHA;
+        ui.scootRing.style.strokeDashoffset = KEHA * (1 - S.ride / 10);
+      }
+    }
     if (ui.gap) ui.gap.textContent = (S.over ? 0 : Math.round((S.gap - 10.5) * 10) / 10 + 2) + ' s';
   }
 
@@ -965,5 +1261,5 @@ function tick() {
 }
 scene.add(sun.target);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => texRegistry.forEach(f => f()));
-window.__liina = { camera, scene, S, museo, mascot, liina, tervis, cars, cans, coins };
+window.__liina = { camera, scene, S, museo, mascot, liina, tervis, cars, cans, coins, scoots, rideScoot, kaytaScootti, liikeSlot, liikeMuodot, valitseLiike };
 tick();

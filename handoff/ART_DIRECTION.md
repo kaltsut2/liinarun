@@ -57,6 +57,7 @@
 | Kolikko | `#f7b500`, emissive `#6b4a00` |
 | NOCCO-tölkki | `#4c525a` → `#33383e` → `#22262b` |
 | NOCCO-oranssi | `#f2600c` |
+| Sähköpotkulauta, limenvihreä | `#76c043` |
 
 ### UI
 | Rooli | Hex |
@@ -92,5 +93,7 @@ Neljä porrasta riittää; älä lisää normal- tai roughness-tekstuureja.
 - Yksi valo ylhäältä vasemmalta, pehmeät maavarjot, ei ambient occlusionia.
 - Siluetti kantaa: hahmon pää on iso (r 0.4 / 2.4 m pituus), kengät isot, raajat paksuja kapseleita.
 - Ei tekstuuridetailia mihin ei osu katse: julkisivut ovat canvas-generoituja ikkunaruudukkoja.
+- Varatut korostukset: Liinan kupari `#c2551d`, NOCCOn oranssi `#f2600c` ja potkulaudan
+  limenvihreä `#76c043`. Mikään tausta-elementti ei käytä niitä.
 - Ei gradienttitaustoja, ei emojia, ei graffiti-imitaatiota.
 - Placeholder on parempi kuin huono yritys: jos malli ei lue chase-kuvassa, yksinkertaista.

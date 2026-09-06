@@ -42,6 +42,14 @@ täyttö `linear-gradient(90deg,#ff9433,#ffd60a)`, `transition:width .2s linear`
 **Boost-merkki:** neutraalina tausta `#ffd60a` ja teksti `#12305e` (`x1`),
 aktiivisena tausta `#f2600c` ja teksti valkoinen (`BOOST 3.4 s`).
 
+**Potkulaudan aktivointinappi** (`#scoot`, oikea alakulma, 66 × 66):
+neliö `border-radius:17px`, sama pilleritausta `rgba(14,20,32,.55)` ja 2 px sisäkehys.
+Keskellä potkulautaikoni (SVG, `currentColor`), oikeassa yläkulmassa lukumäärärusetti
+limenvihreällä `#76c043` pohjalla ja `#12305e` tekstillä. Tyhjänä `opacity:.38` ja
+`pointer-events:none`. Aktivoituna `border-radius:50%`, rusetti piiloon ja päälle
+SVG-kello: `circle r=45`, `stroke:#76c043`, `stroke-width:5`, `transform:rotate(-90deg)`,
+jäljellä oleva aika `stroke-dashoffset = 2πr × (1 − jäljellä / 10)`.
+
 **Ruudut** (`intro`, `over`): koko alan peittävä
 `linear-gradient(180deg,rgba(9,18,38,.12),rgba(9,18,38,.58))`, pystykeskitys,
 `gap:14px`, `transition:opacity .35s`. Piilotus = `opacity:0` +

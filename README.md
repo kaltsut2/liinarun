@@ -49,6 +49,37 @@ lainkaan — näppäimistöllä kyllä. Korjaus:
 Ohjaus on tarkoituksella pelkkä pyyhkäisy ja näppäimistö: ruudulla ei ole
 painettavia nuolia.
 
+## Sähköpotkulauta
+
+Toinen power-up NOCCO-tölkin rinnalla, mutta eri mekaniikalla: tölkki vaikuttaa heti
+poimittaessa, potkulauta menee varastoon ja pelaaja päättää milloin sen käyttää.
+
+- **Keräys.** Kaistalta samalla koneistolla kuin tölkki: kallellaan `0.52 rad`, pyörii
+  `5.2 rad/s`, ympärillä limenvihreä kehä ja pehmeä hehku. 3 kpl kierrossa, väli 150 m.
+- **Varasto.** Poiminta kasvattaa `S.scoots`-lukua. Oikean alakulman nappi näyttää määrän.
+- **Aktivointi.** Nappi kuluttaa yhden ja asettaa `S.ride = 10`.
+- **Kyyti.** Liina seisoo kannella, kädet tangon kahvoilla, lauta mutkittelee kaistan
+  sisällä `sin`-aallolla. Mutkittelu on **vain visuaalista**: `S.laneX` ei muutu, joten
+  kaista- ja törmäyslogiikka pysyy ennallaan.
+- **Lisäelämä.** Kyydin aikana törmäys ei päätä peliä vaan katkaisee kyydin.
+- **Päättyminen.** 10 s täyteen tai törmäys → takaisin juoksuun.
+- **Nappi aktiivisena.** Reunat pyöristyvät ympyräksi ja limenvihreä viiva kuluu kellon
+  lailla: `stroke-dashoffset = 2πr × (1 − jäljellä / 10)`.
+
+Törmäyksen jälkeen on **1,2 sekunnin suoja-aika** (`S.rideGrace`) ja ajastimen
+umpeutumisen jälkeen 0,6 s. Ilman sitä sama auto osuisi heti seuraavalla framella ja
+peli päättyisi siihen törmäykseen, jonka potkulaudan piti estää. Suoja-aika on oma
+lisäykseni, ei osa alkuperäistä pyyntöä.
+
+Malli on proseduraalinen kuten kaikki muukin: kansi `extrudeBody`llä bevelillä, kaulaputki
+ja tanko sylintereinä, pyörät ja lokasuojat sylintereinä ja torus-kaarina, kypärä
+puolipallona. Ohjaustanko on tarkoituksella Liinan hartioita leveämpi — muuten se jää
+takaa katsottaessa vartalon taakse eikä ajoasento lue lainkaan.
+
+Uusi roolisävy `#76c043` on kirjattu `tokens.json`iin ja `handoff/ART_DIRECTION.md`iin
+tyylisopimuksen luvun 9 mukaisesti. Se on varattu korostus Liinan kuparin ja NOCCOn
+oranssin tapaan: tausta-elementit eivät käytä sitä.
+
 ## Ennen kuin muutat mitään
 
 Lue `.claude/skills/liina-escape/SKILL.md` ja `handoff/STYLE_CONTRACT.md`.
