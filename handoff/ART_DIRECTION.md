@@ -9,13 +9,15 @@
 | Jalkakäytävä / reunakivi | `#b4aea2` |
 | Kaistamaalaus | `#f4efdf` |
 | Graniittisokkeli | `#9a958c` |
+| Tietyön oranssi | `#fb8500` |
+| Tietyön valkoinen (heijastava, MeshBasicMaterial) | `#ffffff` |
 
 ### Rakennukset
 | Rooli | Hex |
 |---|---|
 | Tiili (Museo, Lyseo) | `#b0523a` |
 | Tiili, tumma sauma | `#8d4028` |
-| Rauhankadun okra | `#e3c67e` |
+| Kirkkokadun okra | `#e3c67e` |
 | Vaalea rappaus | `#f0ece0` / `#d8d2c2` |
 | Peltikatto / liuske | `#2f333a` |
 | Ikkunalasi | `#33414f` |

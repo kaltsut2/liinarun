@@ -1,6 +1,6 @@
 ---
 name: liina-escape
-description: Rakenna ja laajenna "Liina juoksee Mascotiin" -peliä (Subway Surfers -tyyppinen 3D endless runner Lahden Rauhankadulla). Käytä aina kun teet tälle pelille grafiikkaa, ratamateriaalia, hahmoja, ajoneuvoja, UI:ta tai pelimekaniikkaa.
+description: Rakenna ja laajenna "Liina juoksee Mascotiin" -peliä (Subway Surfers -tyyppinen 3D endless runner Lahden Kirkkokadulla). Käytä aina kun teet tälle pelille grafiikkaa, ratamateriaalia, hahmoja, ajoneuvoja, UI:ta tai pelimekaniikkaa.
 ---
 
 # Liina juoksee Mascotiin — muotokieli ja maailma

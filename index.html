@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <title>Liina juoksee Mascotiin</title>
-<meta name="description" content="Kolmen kaistan endless runner Lahden Rauhankadulla. Liina juoksee Museon edestä Mascotin ovelle, lehtori Tervis perässä.">
+<meta name="description" content="Kolmen kaistan endless runner Lahden Kirkkokadulla. Liina juoksee Museon edestä Mascotin ovelle, lehtori Tervis perässä.">
 <meta name="theme-color" content="#7cc4e4">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Liina juoksee">
@@ -15,14 +15,16 @@
     "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
     "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js",
     "three/addons/exporters/OBJExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js",
-    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js"
+    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js",
+    "three/addons/loaders/GLTFLoader.js": "https://unpkg.com/three@0.184.0/examples/jsm/loaders/GLTFLoader.js"
   },
   "integrity": {
     "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
     "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT",
     "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js": "sha384-4rziNxOBZKQ69i+w+f89KJ55TCYquwchVbByQwmaOeIOXdOU2PLDn3kOfXHwIJC9",
     "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js": "sha384-nbwtoZENJD3Vq+ACK0CuGQdPMuDWHkamC2KJD70EV5nfg6jQjfppKOea07YJN+N3",
-    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ"
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ",
+    "https://unpkg.com/three@0.184.0/examples/jsm/loaders/GLTFLoader.js": "sha384-3CnKaFWE2emo2DOUQi/yFm4SMemUgSZ9IAJe/V2pyJTw9KXWYSmR0MiX/7RoPyiJ"
   }
 }
 </script>
@@ -117,13 +119,260 @@
   .screen .btn{pointer-events:auto;cursor:pointer}
   .screen.pois .btn{pointer-events:none}
 
+  /* Nimimerkkiruutu. Toisin kuin muut ruudut tämä ottaa kosketuksen
+     vastaan kokonaan, jottei napautus lomakkeen ohi käynnistä peliä
+     taustalla. Sisältö on ylhäällä, jottei puhelimen näppäimistö peitä
+     kenttiä. */
+  #nimi{
+    pointer-events:auto;justify-content:flex-start;gap:12px;
+    padding-top:calc(44px + env(safe-area-inset-top));
+    background:linear-gradient(180deg,rgba(9,18,38,.62),rgba(9,18,38,.78));
+  }
+  #nimi.pois{pointer-events:none}
+  /* alareunan tunniste; odotusnäkymässä sisältö on keskellä, joten se piilotetaan */
+  .nimi-tunniste{
+    margin-top:auto;padding:14px 0 calc(52px + env(safe-area-inset-bottom));
+    font:800 20px/1 'Baloo 2',Nunito,sans-serif;letter-spacing:.02em;color:#ef6317;
+  }
+  #nimi.odottaa .nimi-tunniste{display:none}
+  /* pelin HUD ei näy ennen kuin laitteella on nimimerkki */
+  body.tunnistamaton .hud,body.taulu-auki .hud{opacity:0;pointer-events:none}
+  body.tunnistamaton #scoot,body.taulu-auki #scoot{opacity:0;pointer-events:none}
+  #nimi.odottaa{justify-content:center;padding-top:0}
+  #nimi .title{font-size:38px}
+  #nimiLomake{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(300px,100%)}
+  #nimiLomake[hidden],#nimiOdota[hidden]{display:none}
+  #nimiLomake label{display:flex;flex-direction:column;gap:5px;width:100%}
+  #nimiLomake label[hidden]{display:none}
+  #nimiLomake label span{font:800 9px/1 Nunito,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.72);text-align:left;padding-left:4px}
+  .kentta{
+    -webkit-appearance:none;appearance:none;box-sizing:border-box;width:100%;
+    padding:12px 16px;border:0;border-radius:16px;
+    background:rgba(14,20,32,.55);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18);
+    color:#fff;font:800 20px/1.1 'Baloo 2',Nunito,sans-serif;text-align:center;
+    outline:none;user-select:text;-webkit-user-select:text;
+  }
+  .kentta::placeholder{color:rgba(255,255,255,.38)}
+  .kentta:focus{box-shadow:inset 0 0 0 2px #ffd60a}
+  .kentta.pin{letter-spacing:.5em;text-indent:.5em}
+  #nimiOhje{max-width:300px}
+  .pin-selite{
+    margin:2px 0 0;width:100%;box-sizing:border-box;padding:9px 12px;border-radius:12px;
+    background:rgba(14,20,32,.45);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.14);
+    font:700 12px/1.45 Nunito,sans-serif;color:rgba(255,255,255,.88);text-align:left;
+  }
+  .pin-selite b{color:#ffd60a;font-weight:900}
+  #nimiVirhe{
+    width:100%;box-sizing:border-box;padding:9px 12px;border-radius:12px;
+    background:rgba(215,64,44,.9);font:800 12px/1.45 Nunito,sans-serif;color:#fff;
+  }
+  #nimiVirhe[hidden]{display:none}
+  #nimi .btn{border:0;cursor:pointer;margin-top:4px}
+  #nimi .btn:disabled{opacity:.55;cursor:default}
+  .linkki{
+    -webkit-appearance:none;appearance:none;border:0;background:none;padding:8px;
+    font:800 12px/1 Nunito,sans-serif;color:rgba(255,255,255,.85);
+    text-decoration:underline;text-underline-offset:3px;cursor:pointer;
+  }
+  .linkki:focus-visible{outline:2px solid #ffd60a;outline-offset:2px;border-radius:6px}
+  #nimiOdota{display:flex;flex-direction:column;align-items:center;gap:12px}
+
+  /* Päävalikko. Tausta ottaa kosketuksen vastaan, jotta ohi osunut
+     napautus ei käynnistä peliä: peli alkaa PELAA-napista tai välilyönnillä. */
+  /* Etusivu on oma asetelmansa: ei tummennusta lainkaan, otsikko ylhäällä,
+     napit alhaalla ja hahmot niiden välissä. Tausta ottaa kosketuksen
+     vastaan, jotta ohi osunut napautus ei käynnistä peliä. */
+  #intro{
+    pointer-events:auto;background:none;justify-content:space-between;
+    padding-top:calc(34px + env(safe-area-inset-top));
+    padding-bottom:calc(26px + env(safe-area-inset-bottom));
+  }
+  #intro.pois{pointer-events:none}
+  .etusivu-yla,.etusivu-ala{display:flex;flex-direction:column;align-items:center;gap:10px}
+  /* ilman tummennusta pieni teksti tarvitsee oman varjonsa näkyäkseen */
+  #intro .hint,#intro .kicker{text-shadow:0 1px 3px rgba(9,18,38,.75)}
+  /* pelin lukemat pois etusivulta */
+  body.valikossa .hud,body.valikossa #scoot{opacity:0;pointer-events:none}
+  button.btn{border:0;font-family:inherit;cursor:pointer;-webkit-appearance:none;appearance:none}
+  .btn-oranssi{
+    background:linear-gradient(180deg,#ef6317,#c74a0d);color:#fff;
+    box-shadow:0 5px 0 #8a3208,inset 0 2px 0 rgba(255,255,255,.35);
+  }
+  .btn-oranssi:active{box-shadow:0 3px 0 #8a3208,inset 0 2px 0 rgba(255,255,255,.35)}
+  .valikkonapit{display:flex;flex-direction:column;align-items:stretch;gap:12px;width:min(280px,100%)}
+  .valikkonapit .btn{margin-top:0;white-space:nowrap;padding-left:20px;padding-right:20px}
+  #kuka{padding:6px 14px;gap:8px}
+  #kuka[hidden]{display:none}
+  #kuka b{font-size:15px}
+  #kukaParasOtsikko{margin-left:4px}
+
+  /* Juoksun loppu. Kuten päävalikko, tausta ottaa kosketuksen vastaan,
+     jotta ohi osunut napautus ei aloita uutta juoksua kesken lukemisen. */
+  #over{pointer-events:auto}
+  #over.pois{pointer-events:none}
+  /* Palaute on oma laatikkonsa himmennetyn pelikentän päällä. Laatikko on
+     läpinäkymätön, joten keskeltä ei näy peliä; reunoilta näkyy. */
+  .kortti{
+    display:flex;flex-direction:column;align-items:center;gap:14px;
+    width:min(330px,100%);box-sizing:border-box;padding:26px 22px 24px;
+    border-radius:24px;background:#12305e;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.18),0 18px 40px rgba(9,18,38,.55);
+  }
+  .kortti .valikkonapit{width:100%}
+  /* Koti-nappi palautteen vasemmassa yläkulmassa. Perii ruudun
+     pointer-events-arvon, joten piilotettuna se ei nappaa kosketusta. */
+  .koti{
+    position:absolute;
+    left:calc(12px + env(safe-area-inset-left));
+    top:calc(12px + env(safe-area-inset-top));
+    width:46px;height:46px;padding:0;border:0;border-radius:15px;
+    -webkit-appearance:none;appearance:none;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(14,20,32,.55);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18);
+    backdrop-filter:blur(3px);color:#fff;cursor:pointer;
+    transition:transform .1s ease;
+  }
+  .koti:active,.ratas:active{transform:scale(.92)}
+  /* asetusratas etusivun oikeassa yläkulmassa, sama muoto kuin koti-napilla */
+  .ratas{
+    position:absolute;
+    right:calc(12px + env(safe-area-inset-right));
+    top:calc(12px + env(safe-area-inset-top));
+    width:46px;height:46px;padding:0;border:0;border-radius:15px;
+    -webkit-appearance:none;appearance:none;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(14,20,32,.55);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18);
+    backdrop-filter:blur(3px);color:#fff;cursor:pointer;
+    transition:transform .1s ease;
+  }
+  .ratas:focus-visible{outline:3px solid #ffd60a;outline-offset:3px}
+
+  /* Asetukset: sama kortti kuin palautteessa, himmennetyn etusivun päällä */
+  #asetukset{pointer-events:auto}
+  #asetukset.pois{pointer-events:none}
+  #asetukset .title{font-size:38px}
+  .tieto{display:flex;flex-direction:column;align-items:center;gap:4px}
+  .tieto span{font:800 9px/1 Nunito,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.72)}
+  .tieto b{font:800 24px/1.1 'Baloo 2',Nunito,sans-serif;font-variant-numeric:tabular-nums}
+  .tieto small{font:600 11px/1.4 Nunito,sans-serif;color:rgba(255,255,255,.78)}
+  .tieto b.asetus-pin{letter-spacing:.3em;text-indent:.3em}
+  .tieto b.asetus-pin.pin-puuttuu{letter-spacing:0;text-indent:0;color:rgba(255,255,255,.55)}
+  #ulosVaroitus{max-width:260px}
+  #ulosVaroitus[hidden]{display:none}
+  .nimirivi{display:flex;align-items:center;gap:8px}
+  .pikkunappi{
+    -webkit-appearance:none;appearance:none;border:0;padding:0;
+    width:32px;height:32px;border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 2px rgba(255,255,255,.22);
+    color:#fff;cursor:pointer;transition:transform .1s ease;
+  }
+  .pikkunappi:active{transform:scale(.9)}
+  .pikkunappi:focus-visible{outline:3px solid #ffd60a;outline-offset:2px}
+
+  /* Todistenäkymä palkintojen jakoa varten: koko ruutu, iso nimimerkki ja
+     ennätys, juokseva kellonaika ja palvelimen vahvistus kuvakaappaukseen. */
+  .todiste{
+    position:absolute;inset:0;z-index:5;box-sizing:border-box;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;
+    padding:calc(28px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));
+    background:#12305e;color:#fff;text-align:center;
+    box-shadow:inset 0 0 0 10px #ef6317;
+    transition:opacity .25s ease;
+  }
+  .todiste.pois{opacity:0;pointer-events:none}
+  .todiste-osa{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%}
+  .todiste-osa span{font:800 12px/1 Nunito,sans-serif;letter-spacing:.24em;color:rgba(255,255,255,.72)}
+  #todisteNimi{
+    font:800 64px/1 'Baloo 2',Nunito,sans-serif;white-space:nowrap;max-width:100%;
+    text-shadow:0 5px 0 #c2410c,0 9px 0 rgba(0,0,0,.45);
+  }
+  .todiste-luku{font:800 72px/1 'Baloo 2',Nunito,sans-serif;font-variant-numeric:tabular-nums;color:#ffd60a}
+  .todiste-sija{font:800 20px/1 'Baloo 2',Nunito,sans-serif}
+  .todiste-aika{display:flex;flex-direction:column;align-items:center;gap:6px}
+  #todisteKello{font:800 20px/1 'Baloo 2',Nunito,sans-serif;font-variant-numeric:tabular-nums}
+  #todisteVahvistus{font:600 12px/1.4 Nunito,sans-serif;color:rgba(255,255,255,.78)}
+  .selite{
+    margin:2px 0 0;max-width:280px;text-align:left;
+    font:600 11px/1.55 Nunito,sans-serif;color:rgba(255,255,255,.78);
+  }
+  .selite-ikoni{
+    display:inline-flex;align-items:center;justify-content:center;vertical-align:-3px;
+    width:20px;height:20px;margin-right:4px;border-radius:6px;
+    background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.22);color:#fff;
+  }
+  /* pitkä nappiteksti mahtuu 360 px ruudulla yhdelle riville */
+  .valikkonapit .btn-pitka{font-size:17px}
+  .tunniste{margin-top:4px;font:800 11px/1 Nunito,sans-serif;letter-spacing:.06em;color:#ef6317}
+  .koti:focus-visible{outline:3px solid #ffd60a;outline-offset:3px}
+  /* pelin HUD pois palautteen ajaksi */
+  body.loppu .hud,body.loppu #scoot{opacity:0;pointer-events:none}
+  #over .title{font-size:38px}
+  #overPisteet{padding:6px 16px}
+  #overPisteet b{font-size:24px}
+  #overTila:empty{display:none}
+  /* Uusi ennätys: pistemäärä nousee otsikoksi ja pilleri jää pois. */
+  #over.ennatys .title{font-size:64px;line-height:.9}
+  #over.ennatys #overPisteet{display:none}
+  #over.ennatys .kicker{font-size:13px}
+  @media (prefers-reduced-motion: no-preference){
+    #over.ennatys .title{animation:ennatys .5s cubic-bezier(.2,1.4,.4,1) both}
+    @keyframes ennatys{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+  }
+
+  /* Tulostaulu: kärki 10 sinisellä, oma rivi oranssilla. */
+  #taulu{
+    pointer-events:auto;justify-content:flex-start;gap:12px;overflow-y:auto;
+    padding-top:calc(40px + env(safe-area-inset-top));
+    padding-bottom:calc(24px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,rgba(9,18,38,.62),rgba(9,18,38,.8));
+  }
+  #taulu.pois{pointer-events:none}
+  #taulu .title{font-size:38px}
+  #tauluLista{list-style:none;margin:0;padding:0;width:min(340px,100%);display:flex;flex-direction:column;gap:6px}
+  #tauluLista li{
+    display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:10px;
+    min-height:44px;box-sizing:border-box;
+    padding:6px 12px;border-radius:12px;text-align:left;
+    background:rgba(18,48,94,.8);box-shadow:inset 0 0 0 2px rgba(255,255,255,.14);
+  }
+  #tauluLista .sija{font:800 16px/1 'Baloo 2',Nunito,sans-serif;font-variant-numeric:tabular-nums}
+  /* Mitalit sijoille 1–3. Sävyt ovat paletista: kulta on kolikon resepti,
+     hopea kromi ja valkoinen, pronssi okra ja tiili. */
+  #tauluLista .mitali .sija{
+    width:28px;height:28px;border-radius:50%;margin-left:-2px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:15px;line-height:1;padding-top:2px;box-sizing:border-box;
+  }
+  #tauluLista .mitali-1 .sija{background:radial-gradient(circle at 34% 30%,#ffe484,#f7b500);box-shadow:0 0 0 2px #8a5a00;color:#12305e}
+  #tauluLista .mitali-2 .sija{background:radial-gradient(circle at 34% 30%,#f7f8f8,#d7dbe0);box-shadow:0 0 0 2px #6f8090;color:#12305e}
+  #tauluLista .mitali-3 .sija{background:radial-gradient(circle at 34% 30%,#e3c67e,#b0523a);box-shadow:0 0 0 2px #8d4028;color:#fff}
+  #tauluLista .nimi{font:800 14px/1.2 Nunito,sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tauluLista .pisteet{font:800 16px/1 'Baloo 2',Nunito,sans-serif;font-variant-numeric:tabular-nums}
+  #tauluLista li.oma{
+    background:linear-gradient(180deg,#ef6317,#c74a0d);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.35),0 3px 0 #8a3208;
+  }
+  #tauluLista li.oma .sija{color:#fff}
+  /* toisen pelaajan muuttunut rivi välähtää kerran */
+  @media (prefers-reduced-motion: no-preference){
+    #tauluLista li.muuttui{animation:muuttui 1.1s ease-out}
+    @keyframes muuttui{0%{box-shadow:inset 0 0 0 2px #ffd60a,0 0 0 4px rgba(255,214,10,.45)}100%{}}
+  }
+  #tauluLista li.vali{
+    display:block;padding:0;background:none;box-shadow:none;text-align:center;
+    font:800 14px/1 Nunito,sans-serif;letter-spacing:.3em;color:rgba(255,255,255,.55);
+  }
+  #tauluTila:empty{display:none}
+  #taulu .btn{margin-top:6px}
+
   @media (prefers-reduced-motion: reduce){
     #bar{transition:none}
     .screen{transition:none}
   }
 </style>
 </head>
-<body>
+<body class="valikossa">
 <div id="game">
   <div id="stage"></div>
   <div class="hud" id="tl">
@@ -149,19 +398,135 @@
     <b id="scootN">0</b>
   </button>
   <div class="screen" id="intro">
-    <div class="kicker">LAHTI · RAUHANKATU</div>
-    <div class="title">LIINA<br>JUOKSEE</div>
-    <div class="hint">Museon edestä Mascotin ovelle</div>
-    <div class="btn">JUOKSE!</div>
-    <div class="hint">napauta / väli · nuolet vasen–oikea · ylös hyppy</div>
+    <button class="ratas" id="avaaAsetukset" type="button" aria-label="Asetukset">
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3.2"/>
+        <path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2 5.5 5.5"/>
+        <circle cx="12" cy="12" r="6.6"/>
+      </svg>
+    </button>
+    <div class="etusivu-yla">
+      <div class="kicker">LAHTI · KIRKKOKATU</div>
+      <div class="title">LIINA<br>JUOKSEE</div>
+      <div class="hint">Museon edestä Mascotin ovelle</div>
+    </div>
+    <div class="etusivu-ala">
+      <div class="pill" id="kuka" hidden>
+        <b id="kukaNimi"></b>
+        <span id="kukaParasOtsikko">ENNÄTYS</span><b id="kukaParas"></b>
+      </div>
+      <div class="valikkonapit">
+        <button class="btn" data-pelaa type="button">PELAA</button>
+        <button class="btn btn-oranssi" id="avaaTaulu" type="button">TULOSTAULU</button>
+      </div>
+      <div class="hint">väli aloittaa · nuolet vasen–oikea<br>ylös hyppy · alas kierähdys</div>
+    </div>
+  </div>
+  <div class="screen pois" id="taulu" style="opacity:0">
+    <div class="title">TULOSTAULU</div>
+    <ol id="tauluLista"></ol>
+    <div class="hint" id="tauluTila"></div>
+    <button class="btn" id="suljeTaulu" type="button">TAKAISIN</button>
+  </div>
+  <div class="screen" id="nimi">
+    <div class="kicker">LAHTI · KIRKKOKATU</div>
+    <div class="title" id="nimiOtsikko">VALITSE<br>NIMIMERKKI</div>
+    <div class="hint" id="nimiOhje"></div>
+    <form id="nimiLomake" novalidate hidden>
+      <label><span>NIMIMERKKI</span>
+        <input class="kentta" id="nimiKentta" name="username" type="text" maxlength="16" required
+               autocomplete="username" autocapitalize="words" autocorrect="off" spellcheck="false"
+               placeholder="esim. Liina">
+      </label>
+      <label><span>PIN · 4 NUMEROA</span>
+        <input class="kentta pin" id="pinKentta" name="password" type="password" inputmode="numeric"
+               pattern="[0-9]*" maxlength="4" required autocomplete="new-password" placeholder="••••">
+      </label>
+      <label><span>PIN UUDELLEEN</span>
+        <input class="kentta pin" id="pin2Kentta" type="password" inputmode="numeric"
+               pattern="[0-9]*" maxlength="4" autocomplete="new-password" placeholder="••••">
+      </label>
+      <p class="pin-selite" id="pinSelite"><b>Miksi PIN?</b>
+        Sen ei tarvitse olla salainen. PINillä pääset tarvittaessa takaisin omalle
+        nimimerkillesi, esimerkiksi uudella laitteella, eikä kukaan muu voi varata nimimerkkiäsi.</p>
+      <div id="nimiVirhe" role="alert" hidden></div>
+      <button class="btn" id="nimiLaheta" type="submit">VARAA NIMIMERKKI</button>
+      <button class="linkki" id="nimiVaihda" type="button">Minulla on jo nimimerkki</button>
+    </form>
+    <div id="nimiOdota" hidden>
+      <div class="hint" id="nimiOdotaTeksti">Haetaan pelaajaa…</div>
+      <button class="btn" id="nimiUudelleen" type="button" hidden>YRITÄ UUDELLEEN</button>
+    </div>
+    <div class="nimi-tunniste">#orangeisthenewblack</div>
+  </div>
+  <div class="screen pois" id="asetukset" style="opacity:0">
+    <div class="kortti">
+      <div class="title">ASETUKSET</div>
+      <div class="tieto"><span>NIMIMERKKI</span>
+        <div class="nimirivi">
+          <b id="asetusNimi"></b>
+          <button class="pikkunappi" id="avaaTodiste" type="button" aria-label="Näytä nimimerkki ja ennätys isona">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="tieto"><span>ENNÄTYS</span><b id="asetusParas"></b><small id="asetusSija"></small></div>
+      <div class="tieto"><span>PIN-KOODI</span><b class="asetus-pin" id="asetusPin"></b><small id="asetusPinOhje"></small></div>
+      <div class="hint" id="ulosVaroitus" hidden>Tarvitset PIN-koodin, jotta pääset takaisin tälle nimimerkille.</div>
+      <div class="valikkonapit">
+        <button class="btn btn-pitka" id="suljeAsetukset" type="button">TAKAISIN PÄÄVALIKKOON</button>
+        <button class="btn btn-oranssi" id="kirjauduUlos" type="button">KIRJAUDU ULOS</button>
+      </div>
+      <p class="selite">
+        <span class="selite-ikoni" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </span>
+        Näyttää nimimerkkisi ja ennätyksesi koko ruudulla. Näytä se vaalitiimille saadaksesi palkinnon.
+      </p>
+      <div class="tunniste">#orangeisthenweblack</div>
+    </div>
+  </div>
+  <div class="todiste pois" id="todiste" role="dialog" aria-label="Nimimerkki ja ennätys">
+    <div class="kicker">LIINA JUOKSEE MASCOTIIN</div>
+    <div class="todiste-osa">
+      <span>NIMIMERKKI</span>
+      <b id="todisteNimi"></b>
+    </div>
+    <div class="todiste-osa">
+      <span>ENNÄTYS</span>
+      <b id="todisteParas" class="todiste-luku"></b>
+      <div class="todiste-sija" id="todisteSija"></div>
+    </div>
+    <div class="todiste-aika">
+      <b id="todisteKello"></b>
+      <small id="todisteVahvistus"></small>
+    </div>
+    <div class="tunniste">#orangeisthenweblack</div>
+    <button class="btn" id="suljeTodiste" type="button">SULJE</button>
   </div>
   <div class="screen pois" id="over" style="opacity:0">
-    <div class="kicker">JÄÄT JÄLKEEN</div>
-    <div class="title" style="font-size:38px">TERVIS<br>SAI KIINNI</div>
-    <div class="hint" id="overText"></div>
-    <div class="btn">UUDESTAAN</div>
+    <button class="koti" id="kotiin" type="button" aria-label="Päävalikkoon">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3.5 11 12 4l8.5 7"/><path d="M6 9.5V20h4.5v-5.5h3V20H18V9.5"/>
+      </svg>
+    </button>
+    <div class="kortti">
+      <div class="kicker" id="overKicker">JÄÄT JÄLKEEN</div>
+      <div class="title" id="overOtsikko">TERVIS<br>SAI KIINNI</div>
+      <div class="hint" id="overText"></div>
+      <div class="pill" id="overPisteet"><b id="overLuku">0</b><span>PISTETTÄ</span></div>
+      <div class="hint" id="overTila"></div>
+      <div class="valikkonapit">
+        <button class="btn" data-pelaa type="button">YRITÄ UUDELLEEN</button>
+        <button class="btn btn-oranssi" data-taulu type="button">TULOSTAULU</button>
+      </div>
+    </div>
   </div>
 </div>
+<script type="module" src="verkko.js"></script>
+<script type="module" src="valikko.js"></script>
 <script type="module" src="liina-scene.js"></script>
 </body>
 </html>

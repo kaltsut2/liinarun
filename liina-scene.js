@@ -109,11 +109,71 @@ const sky = new THREE.Mesh(
       grd.addColorStop(0, '#e9f4f7'); grd.addColorStop(0.46, '#bfe2ef');
       grd.addColorStop(0.62, '#7cc4e4'); grd.addColorStop(1, '#3f9ccf');
       g.fillStyle = grd; g.fillRect(0, 0, w, h);
-    })
+    }),
+    /* Taivaspallo on 300 m säteellä ja sumu peittää kaiken 280 m jälkeen,
+       joten sumu piilotti taivaan liukuman kokonaan vaalean yksiväriseksi. */
+    fog: false
   })
 );
 sky.rotation.x = Math.PI;
 scene.add(sky);
+
+/* ---------- pilvet ----------
+   Palloryppäitä toon-varjostuksella, ei litteitä kuvia (tyylisopimus 5.5).
+   Ne ovat maisemassa, eivät rullaavassa maailmassa: kaukana olevat pilvet
+   eivät näytä liikkuvan juostessa. Koko taivas kiertää hitaasti. */
+const pilvet = new THREE.Group();
+{
+  const pilviMat = toon(0xf7f8f8);
+  let siemen = 11;
+  const r = () => (siemen = (siemen * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 14; i++) {
+    const pilvi = new THREE.Group();
+    const osia = 4 + Math.floor(r() * 4);
+    for (let k = 0; k < osia; k++) {
+      const koko = 4 + r() * 5;
+      const pallo = new THREE.Mesh(new THREE.SphereGeometry(koko, 14, 10), pilviMat);
+      pallo.position.set((k - osia / 2) * 5.5 + r() * 3, r() * 2.5, r() * 5 - 2.5);
+      pallo.scale.y = 0.62;
+      pilvi.add(pallo);
+    }
+    const kulma = (i / 14) * Math.PI * 2 + r() * 0.3;
+    const etaisyys = 120 + r() * 80;
+    pilvi.position.set(Math.cos(kulma) * etaisyys, 48 + r() * 30, Math.sin(kulma) * etaisyys);
+    pilvi.rotation.y = -kulma + Math.PI / 2;
+    pilvet.add(pilvi);
+  }
+}
+scene.add(pilvet);
+
+/* ---------- nurmikko ----------
+   Kaikki maa tien ja jalkakäytävien ulkopuolella. Pinta on tien yläpinnan
+   alapuolella, joten tie peittää sen. Tekstuuri liukuu juoksun tahdissa:
+   muuten nurmi näyttäisi pysyvän paikallaan talojen ohittaessa. */
+const NURMI_RUUTU = 6;                                   /* metriä per toisto */
+const nurmiTex = canvasTex(256, 256, (g, w, h) => {
+  g.fillStyle = '#4e9a4a'; g.fillRect(0, 0, w, h);
+  let siemen = 23;
+  const r = () => (siemen = (siemen * 16807) % 2147483647) / 2147483647;
+  /* laikut, sitten korret */
+  for (let i = 0; i < 26; i++) {
+    g.fillStyle = r() < 0.5 ? 'rgba(47,107,60,.28)' : 'rgba(255,255,255,.06)';
+    g.beginPath(); g.ellipse(r() * w, r() * h, 18 + r() * 34, 10 + r() * 20, r() * 3, 0, 6.2832); g.fill();
+  }
+  g.lineCap = 'round';
+  for (let i = 0; i < 900; i++) {
+    const x = r() * w, y = r() * h, pit = 3 + r() * 6;
+    g.strokeStyle = r() < 0.62 ? 'rgba(47,107,60,.6)' : 'rgba(255,255,255,.16)';
+    g.lineWidth = 1 + r() * 1.2;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 3, y - pit); g.stroke();
+  }
+}, [900 / NURMI_RUUTU, 700 / NURMI_RUUTU]);
+nurmiTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+const nurmi = new THREE.Mesh(new THREE.PlaneGeometry(900, 700), toon(0xffffff, { map: nurmiTex }));
+nurmi.rotation.x = -Math.PI / 2;
+nurmi.position.set(0, -0.02, -150);
+nurmi.receiveShadow = true;
+scene.add(nurmi);
 
 const camera = new THREE.PerspectiveCamera(72, 1, 0.1, 400);
 camera.position.set(2.6, 5.2, -15);
@@ -192,7 +252,7 @@ for (const s of [-1, 1]) {
   sides.push(arr);
 }
 
-/* ---------- Rauhankadun liikkeet ----------
+/* ---------- Kirkkokadun liikkeet ----------
    Antonio ja Ajomessi ovat kulkusuunnassa vasemmalla. Ne rakennetaan vasemman
    poolin paikalle 3, joten ne eivät rakenteellisesti voi päätyä oikealle laidalle.
    Kyltit ulkonevat seinästä kadulle ja katsovat +z eli tulijaa kohti — tasossa
@@ -510,6 +570,60 @@ const museo = new THREE.Group();
   scene.add(museo);
 }
 
+/* ---------- Lahden museo mallitiedostosta ----------
+   Lyk_museo.glb on tehty three.js:n GLTFExporterilla, ja sen materiaalit on
+   nimetty pelin paletin rooleilla. Ne vaihdetaan nimen perusteella pelin
+   toon-materiaaleiksi, jotta museo noudattaa tyylisopimuksen varjostusta
+   (L1) ja palettia (L2). Mallin julkisivu on +z:ssa, joten se käännetään
+   180° katsomaan etusivun kameraa kohti ja keskitetään kuvaan. Proseduraalinen museo näkyy siihen asti ja jää varalle,
+   jos lataus epäonnistuu. */
+MAT.plaster = toon(0xd8d2c2);
+const MUSEO_MATERIAALIT = {
+  graniitti: MAT.granite, tiili: MAT.brick, tiili_tumma: MAT.brickDark,
+  rappaus: MAT.plaster, kerma: MAT.cream, liuske: MAT.slate,
+  katto_harmaa: toon(0x7d8794), katto_punainen: toon(0xb9603f), lasi: MAT.glassDark
+};
+const MUSEO_Z = 36;
+
+(async () => {
+  try {
+    const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+    const gltf = await new GLTFLoader().loadAsync('Lyk_museo.glb');
+    const malli = gltf.scene;
+    malli.traverse(o => {
+      if (!o.isMesh) return;
+      const vanha = o.material;
+      o.material = MUSEO_MATERIAALIT[vanha.name] || toon(vanha.color ? vanha.color.getHex() : 0xd8d2c2);
+      if (vanha !== o.material && vanha.dispose) vanha.dispose();
+      o.castShadow = true;
+      o.receiveShadow = true;
+    });
+    malli.rotation.y = Math.PI;
+    malli.position.set(0, 0, MUSEO_Z);
+    /* Keskitetään rajalaatikon mukaan etusivun kameran keskilinjalle. Mallin
+       origo ei ole keskellä (torni ulottuu toiselle sivulle pidemmälle). */
+    malli.updateMatrixWorld(true);
+    const keski = new THREE.Box3().setFromObject(malli).getCenter(new THREE.Vector3());
+    malli.position.x += ASETELMA.kamera[0] - keski.x;
+    scene.add(malli);
+    museo.visible = false;
+    museoMalli = malli;
+  } catch (e) {
+    console.warn('Museon mallia ei saatu ladattua, käytetään varamallia.', e);
+  }
+})();
+let museoMalli = null;
+
+/* Etusivun puut: kolme paria kadun molemmin puolin hahmojen ja museon
+   välissä. Ne ovat z > 12 eli juoksukameran (z 9,8, katse −z) takana, joten
+   pelinäkymässä niitä ei näy. */
+for (const z of [13, 21, 29]) for (const sx of [-1, 1]) {
+  const t = tree();
+  t.position.set(sx * 6.3, 0.15, z);
+  t.rotation.y = z * 0.7 + sx;
+  scene.add(t);
+}
+
 /* ---------- runners ---------- */
 const stripeTex = canvasTex(96, 96, (g, w, h) => {
   g.fillStyle = '#fdf1f3'; g.fillRect(0, 0, w, h);
@@ -579,9 +693,26 @@ function makeRunner(o) {
     m.castShadow = true;
     return m;
   };
+  /* Otsatukka. Takakuori jättää eteen kasvoille aukon, jolloin päälaki ja
+     otsa jäivät kaljuiksi. Tämä kuori peittää aukon yläosan: phi keskitetään
+     -z:aan (1,5π) ja theta rajataan niin, että reuna jää kulmien yläpuolelle.
+     Säde on hieman suurempi kuin takakuoren, jottei limittyvä sauma välky. */
+  const otsatukka = (aukko, thetaLen) => {
+    const leveys = aukko + 0.12;
+    const m = new THREE.Mesh(
+      new THREE.SphereGeometry(0.425, 20, 12, Math.PI * 1.5 - leveys / 2, leveys, 0, thetaLen),
+      o.hair
+    );
+    m.material.side = THREE.DoubleSide;
+    m.position.y = 2.3;
+    m.scale.set(1.03, 1.1, 1.0);
+    m.castShadow = true;
+    return m;
+  };
 
   if (o.longHair) {
     g.add(hairCap(0.42, Math.PI * 0.74, Math.PI * 1.62));
+    g.add(otsatukka(Math.PI * 0.38, Math.PI * 0.30));   /* reuna kulmien yläpuolella */
     /* takatukka roikkuu selässä, olkapäiden yläpuolelta taaksepäin */
     const back = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.62, 6, 16), o.hair);
     back.position.set(0, 1.98, 0.34);
@@ -599,6 +730,7 @@ function makeRunner(o) {
     }
   } else {
     g.add(hairCap(0.42, Math.PI * 0.56, Math.PI * 1.5));
+    g.add(otsatukka(Math.PI * 0.5, Math.PI * 0.25));    /* korkeampi, hieman väistyvä hiusraja */
   }
 
   if (o.briefcase) {
@@ -624,19 +756,52 @@ function makeRunner(o) {
     glass.scale.setScalar(1.4);
     arms[1].add(glass);
   }
+  /* Kasvot. Hahmot näkyvät pelissä vain takaa, mutta etusivulla edestä,
+     joten päähän lisätään yksinkertaiset sarjakuvakasvot. Ne ovat pään
+     lapsia (-z-puolella), joten ne seuraavat pään muotoa ja jäävät takaa
+     katsottaessa pään taakse. */
+  if (o.kasvot) {
+    const f = new THREE.Group();
+    const silmaMat = MAT.tyre, kiiltoMat = new THREE.MeshBasicMaterial({ color: 0xf7f8f8 });
+    for (const sx of [-1, 1]) {
+      const silma = new THREE.Mesh(new THREE.SphereGeometry(0.058, 14, 10), silmaMat);
+      silma.scale.set(1, 1.3, 0.5); silma.position.set(sx * 0.14, 0.03, -0.36); f.add(silma);
+      const kiilto = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), kiiltoMat);
+      kiilto.position.set(sx * 0.14 + 0.018, 0.06, -0.392); f.add(kiilto);
+      const kulma = new THREE.Mesh(new THREE.CapsuleGeometry(0.018, 0.09, 4, 8), o.hair);
+      kulma.rotation.z = Math.PI / 2 + (o.kasvot === 'tervis' ? sx * 0.32 : -sx * 0.12);
+      kulma.position.set(sx * 0.14, o.kasvot === 'tervis' ? 0.135 : 0.155, -0.335); f.add(kulma);
+      if (o.kasvot === 'liina') {
+        const poski = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), toon(0xf0a3ba));
+        poski.scale.set(1, 0.7, 0.35); poski.position.set(sx * 0.22, -0.08, -0.31); f.add(poski);
+      }
+    }
+    const nena = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 8), MAT.skin);
+    nena.position.set(0, -0.04, -0.395); f.add(nena);
+    if (o.kasvot === 'liina') {
+      /* virnistys: alaspäin kaartuva kaari */
+      const suu = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.016, 6, 14, Math.PI), MAT.brickDark);
+      suu.rotation.z = Math.PI; suu.position.set(0, -0.12, -0.362); f.add(suu);
+    } else {
+      /* tiukka suu, ei hymyä */
+      const suu = new THREE.Mesh(new THREE.CapsuleGeometry(0.016, 0.1, 4, 8), MAT.brickDark);
+      suu.rotation.z = Math.PI / 2; suu.position.set(0, -0.15, -0.365); f.add(suu);
+    }
+    head.add(f);
+  }
   return { group: g, legs, arms, head };
 }
 
 const liina = makeRunner({
   top: MAT.pyjama, pants: MAT.pyjamaPants, sleeve: MAT.pyjama, shoe: MAT.pinkShoe,
-  hair: MAT.copper, longHair: true
+  hair: MAT.copper, longHair: true, kasvot: 'liina'
 });
 liina.group.position.set(0, 0, 0);
 world.add(liina.group);
 
 const tervis = makeRunner({
   top: MAT.sweater, pants: MAT.darkTrouser, sleeve: MAT.sweater, shoe: MAT.case,
-  hair: MAT.hairShort, briefcase: true, coffeeGlass: true
+  hair: MAT.hairShort, briefcase: true, coffeeGlass: true, kasvot: 'tervis'
 });
 tervis.group.scale.setScalar(1.06);
 tervis.group.position.set(0, 0, 12.5);
@@ -735,15 +900,20 @@ function makeBus() {
 function makeCar(kind) {
   const g = new THREE.Group();
   const spec = {
-    tesla:  { body: MAT.white,        w: 1.88, nose: 2.35, tail: -2.32, waist: 0.98, roof: 1.68, gf: 0.55, gr: -1.85 },
-    bmw:    { body: MAT.red,          w: 1.84, nose: 2.3,  tail: -2.28, waist: 0.9,  roof: 1.46, gf: 0.35, gr: -1.95 },
-    wagon:  { body: toon(0x6f8090),   w: 1.82, nose: 2.26, tail: -2.24, waist: 1.0,  roof: 1.7,  gf: 0.6,  gr: -2.0 }
+    /* Katot ovat hypyn huipun (2,10 m) yläpuolella, jotta autojen yli ei
+       näytä pääsevän. Liina on 2,45 m pitkä, joten alkuperäiset 1,5–1,7 m
+       katot jäivät rinnan korkeudelle ja houkuttelivat hyppäämään. */
+    tesla:  { body: MAT.white,        w: 1.88, nose: 2.35, tail: -2.32, waist: 1.42, roof: 2.50, gf: 0.55, gr: -1.85 },
+    bmw:    { body: MAT.red,          w: 1.84, nose: 2.3,  tail: -2.28, waist: 1.30, roof: 2.30, gf: 0.35, gr: -1.95 },
+    wagon:  { body: toon(0x6f8090),   w: 1.82, nose: 2.26, tail: -2.24, waist: 1.44, roof: 2.52, gf: 0.6,  gr: -2.0 }
   }[kind];
   const { nose, tail, waist, roof, gf, gr, w } = spec;
+  /* Alakorin korkeudet venytetään helman (0,26) yläpuolelta, pyörät eivät. */
+  const K = 1.4, yk = y => 0.26 + (y - 0.26) * K;
 
   const lower = extrudeBody([
-    [nose, 0.44], [nose - 0.04, 0.82, 0.04, 0.04], [nose - 1.0, waist, 0, 0.08],
-    [gr - 0.1, waist], [tail + 0.1, waist - 0.14, 0.04, 0], [tail, 0.5],
+    [nose, yk(0.44)], [nose - 0.04, yk(0.82), 0.04, 0.04], [nose - 1.0, waist, 0, 0.08],
+    [gr - 0.1, waist], [tail + 0.1, waist - 0.14, 0.04, 0], [tail, yk(0.5)],
     [tail + 0.22, 0.26], [nose - 0.28, 0.26]
   ], w, spec.body);
   g.add(lower);
@@ -760,30 +930,30 @@ function makeCar(kind) {
   g.add(roofCap);
 
   const grille = new THREE.Mesh(new THREE.BoxGeometry(w - 0.5, 0.24, 0.16), MAT.slate);
-  grille.position.set(0, 0.44, nose - 0.02); g.add(grille);
+  grille.position.set(0, yk(0.44), nose - 0.02); g.add(grille);
   const bumper = new THREE.Mesh(new THREE.BoxGeometry(w - 0.14, 0.2, 0.14), MAT.slate);
   bumper.position.set(0, 0.28, nose - 0.12); g.add(bumper);
 
   for (const sx of [-1, 1]) {
     const lamp = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.34, 4, 12), new THREE.MeshBasicMaterial({ color: 0xfff8d8 }));
     lamp.rotation.z = Math.PI / 2;
-    lamp.position.set(sx * (w / 2 - 0.34), 0.78, nose - 0.16);
+    lamp.position.set(sx * (w / 2 - 0.34), yk(0.78), nose - 0.16);
     g.add(lamp);
     const tailLamp = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.3, 4, 10), new THREE.MeshBasicMaterial({ color: 0xd93b26 }));
     tailLamp.rotation.z = Math.PI / 2;
-    tailLamp.position.set(sx * (w / 2 - 0.32), 0.88, tail + 0.08);
+    tailLamp.position.set(sx * (w / 2 - 0.32), yk(0.88), tail + 0.08);
     g.add(tailLamp);
     const mirror = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), spec.body);
     mirror.scale.set(1, 0.7, 1.4);
     mirror.position.set(sx * (w / 2 + 0.04), waist + 0.16, gf + 0.35);
     g.add(mirror);
     for (const sz of [-1, 1]) {
-      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.3, 20), MAT.tyre);
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.32, 20), MAT.tyre);
       wheel.rotation.z = Math.PI / 2;
-      wheel.position.set(sx * (w / 2 - 0.08), 0.44, sz * (nose - 1.2));
+      wheel.position.set(sx * (w / 2 - 0.08), 0.52, sz * (nose - 1.2));
       wheel.castShadow = true;
       g.add(wheel);
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.33, 16), MAT.chrome);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.35, 16), MAT.chrome);
       hub.rotation.z = Math.PI / 2;
       hub.position.copy(wheel.position);
       hub.position.x += sx * 0.02;
@@ -814,7 +984,9 @@ function respawnCar(c) {
   let z = Math.min(...cars.map(o => o.position.z)) - (26 + Math.random() * 14);
   let free = [];
   for (let attempt = 0; attempt < 4; attempt++) {
-    const taken = cars.filter(o => o !== c && Math.abs(o.position.z - z) < 22).map(o => o.userData.lane);
+    /* tietyön sulkema kaista lasketaan varatuksi koko matkalta */
+    const taken = cars.filter(o => o !== c && Math.abs(o.position.z - z) < 22).map(o => o.userData.lane)
+      .concat(typeof suljetutKaistat === 'function' ? suljetutKaistat() : []);
     free = [-1, 0, 1].filter(l => !taken.includes(l));
     if (free.length >= 2) break;
     z -= 28;
@@ -965,6 +1137,199 @@ for (let i = 0; i < 3; i++) {
   scoots.push(tilt);
 }
 
+/* ---------- tietyöpuomi ----------
+   Kaistan sulkeva punavalkoinen puomi kahden A-pukin päällä. Sen yli ei
+   pääse hyppäämällä (hyppy nousee 1,63 m, puomi alkaa 1,45 m:stä ja
+   hahmo on 2,45 m pitkä), joten ainoat keinot ovat kierähtää ali tai
+   vaihtaa kaistaa.
+
+   Tietyö sulkee kaistan myös liikenteeltä. Autot ajavat puomia
+   nopeammin, joten samalla kaistalla ne ajaisivat sen läpi. Siksi puomi
+   sijoitetaan vain kaistalle, jolla ei ole autoa takana, eikä
+   respawnCar() tuo uusia autoja suljetulle kaistalle. */
+const KIERI = 0.7;
+/* Etusivun asetelma: kamera kadulla hahmojen edessä katsoen kohti Museota.
+   Hahmot seisovat ruudun kummassakin puolikkaassa kasvot kameraan päin,
+   kumpikin hieman keskilinjaa kohti kääntyneenä. Kamera katsoo +z:aan,
+   joten ruudun vasen on +x. Tervis vasemmalla ja Liina oikealla, jolloin
+   lähtö juoksuun on luonnollinen. [x, z, kierto] ja [x, y, z]. */
+const ASETELMA = {
+  liina: [-1.0, 0, -0.3],
+  tervis: [1.3, 0.95, 0.3],        /* hieman Liinan takana vasemmalla */
+  /* kamera ylhäällä ja hieman alaspäin suunnattuna, dronemaisesti */
+  kamera: [0.1, 3.7, -4.9],
+  katse: [0.1, 0.9, 4],
+  /* Etusivun laajakulma. Leveä kuvakulma läheltä kuvattuna venyttää
+     reunoja ja kaartaa katua, mikä antaa lievän kalansilmävaikutelman.
+     Juoksukuvan 72° (L6) ei muutu; kulma liukuu siihen pelin alkaessa. */
+  fov: 92
+};
+camera.fov = ASETELMA.fov;
+camera.updateProjectionMatrix();
+/* Hyppy nousee 2,10 m (vy²/2g) ja kestää 0,73 s. Alkuperäinen 9,2 / 26
+   nousi 1,63 m, mikä ei riittänyt korotetun matalan puomin yli. */
+const HYPPY_VY = 11.6, PAINOVOIMA = 32;
+/* Kaksi puomia. Matalan yli pääsee hypyllä (huippu 2,10 m, jalat palkin
+   yläpuolella noin 0,3 s), korkean ei. Kummankin ali pääsee kierähtämällä:
+   kierähdyspallo on 1,1 m korkea. */
+const PUOMI = {
+  matala: { ala: 1.45, yla: 1.75, tolppa: 1.81 },
+  korkea: { ala: 1.60, yla: 1.95, kyltti: [2.02, 3.72], tolppa: 3.78 }
+};
+const TIETYO_ORANSSI = '#fb8500', TIETYO_VALKO = '#ffffff';
+
+/* Raidat piirretään valaistuksesta riippumattomalla materiaalilla: toon-
+   varjostus tummentaisi valkoisen harmaaksi. Tyylisopimus sallii tämän
+   kylteille, ja se vastaa oikean tietyömerkin heijastavaa pintaa. */
+const puomiTex = canvasTex(256, 64, (g, w, h) => {
+  g.fillStyle = TIETYO_VALKO; g.fillRect(0, 0, w, h);
+  g.fillStyle = TIETYO_ORANSSI;
+  for (let x = -h; x < w + h; x += 64) {
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 32, 0); g.lineTo(x + 32 + h, h); g.lineTo(x + h, h);
+    g.closePath(); g.fill();
+  }
+});
+const puomiMat = new THREE.MeshBasicMaterial({ map: puomiTex });
+
+/* Korkean puomin kyltti: kumileimasimella hieman vinoon lyöty teksti.
+   Kulumat arvotaan kiinteällä siemenellä, jotta fonttien latauksen
+   jälkeinen uudelleenpiirto näyttää samalta. */
+const leimaTex = canvasTex(512, 396, (g, w, h) => {
+  g.fillStyle = TIETYO_VALKO; g.fillRect(0, 0, w, h);
+  g.save();
+  g.translate(w / 2, h / 2);
+  g.rotate(-0.075);
+  g.strokeStyle = '#d7402c'; g.fillStyle = '#d7402c';
+  g.lineWidth = 10; g.strokeRect(-226, -160, 452, 320);
+  g.lineWidth = 4; g.strokeRect(-210, -144, 420, 288);
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  /* Teksti merkki merkilleen pyydetyssä muodossa, kahdelle riville jaettuna,
+     jotta se mahtuu isona. Poikkeaa tarkoituksella tyylisopimuksen
+     "vain versaalit" -säännöstä. Koko sovitetaan leiman sisään. */
+  const rivit = ['V***u mikä', 'työmaa'];
+  let koko = 150;
+  do { g.font = `800 ${koko}px 'Baloo 2', Nunito, sans-serif`; koko -= 2; }
+  while (Math.max(...rivit.map(r => g.measureText(r).width)) > 380 && koko > 24);
+  g.fillText(rivit[0], 0, -koko * 0.48);
+  g.fillText(rivit[1], 0, koko * 0.62);
+  g.restore();
+  let siemen = 7;
+  const satunnainen = () => (siemen = (siemen * 16807) % 2147483647) / 2147483647;
+  g.fillStyle = TIETYO_VALKO;
+  for (let i = 0; i < 900; i++) {
+    g.beginPath();
+    g.arc(30 + satunnainen() * 452, 30 + satunnainen() * 336, 0.8 + satunnainen() * 2.6, 0, 6.2832);
+    g.fill();
+  }
+});
+
+function pukki(x, korkeus) {
+  const g = new THREE.Group();
+  /* A-pukki: kaksi vinoa tolppaa, jotka kohtaavat ylhäällä */
+  for (const sz of [-1, 1]) {
+    const kulma = Math.atan(0.35 / korkeus);
+    const tolppa = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, korkeus / Math.cos(kulma), 8), MAT.slate);
+    tolppa.position.set(x, korkeus / 2, sz * 0.175);
+    tolppa.rotation.x = -sz * kulma;
+    tolppa.castShadow = true;
+    g.add(tolppa);
+  }
+  const jalka = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.8, 8), MAT.slate);
+  jalka.rotation.x = Math.PI / 2;
+  jalka.position.set(x, 0.06, 0);
+  g.add(jalka);
+  return g;
+}
+
+function vilkku(x, y) {
+  const g = new THREE.Group();
+  const kanta = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.08, 14), MAT.slate);
+  kanta.position.set(x, y, 0);
+  const lamppu = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), MAT.yellowGlow);
+  lamppu.position.set(x, y + 0.04, 0);
+  g.add(kanta, lamppu);
+  g.userData.lamppu = lamppu;
+  return g;
+}
+
+function puomiMuoto(tyyppi) {
+  const m = PUOMI[tyyppi];
+  const g = new THREE.Group();
+  const palkki = new THREE.Mesh(new THREE.BoxGeometry(2.3, m.yla - m.ala, 0.18), puomiMat);
+  palkki.position.y = (m.ala + m.yla) / 2;
+  palkki.castShadow = true;
+  g.add(palkki, pukki(-1.08, m.tolppa), pukki(1.08, m.tolppa));
+  const valot = [vilkku(-1.08, m.tolppa + 0.02)];
+  if (m.kyltti) {
+    const [a, y] = m.kyltti;
+    /* etupinta (+z) kantaa leiman, muut pinnat ovat puhdasta valkoista */
+    const valko = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const kilpi = new THREE.Mesh(new THREE.BoxGeometry(2.2, y - a, 0.08),
+      [valko, valko, valko, valko, new THREE.MeshBasicMaterial({ map: leimaTex }), valko]);
+    kilpi.position.y = (a + y) / 2;
+    kilpi.castShadow = true;
+    g.add(kilpi);
+    valot.push(vilkku(1.08, m.tolppa + 0.02));
+  }
+  valot.forEach(v => g.add(v));
+  g.userData.lamput = valot.map(v => v.userData.lamppu);
+  return g;
+}
+
+function makePuomi() {
+  const g = new THREE.Group();
+  g.userData.muodot = { matala: puomiMuoto('matala'), korkea: puomiMuoto('korkea') };
+  g.add(g.userData.muodot.matala, g.userData.muodot.korkea);
+  g.userData.tyyppi = 'korkea';
+  return g;
+}
+
+function asetaTyyppi(p, tyyppi) {
+  p.userData.tyyppi = tyyppi;
+  for (const [nimi, muoto] of Object.entries(p.userData.muodot)) muoto.visible = nimi === tyyppi;
+}
+
+const puomit = [];
+for (let i = 0; i < 3; i++) {
+  const p = makePuomi();
+  p.visible = false;
+  p.userData.lane = 0;
+  p.position.set(0, 0, -150 - i * 130);
+  scene.add(p);
+  puomit.push(p);
+}
+
+/* Sijoittaa puomin kaistalle, jolla ei ole autoa puomin takana eikä
+   poimittavaa kohdalla. Jos sopivaa kaistaa ei ole, puomi jää piiloon
+   ja yrittää uudelleen seuraavalla kierroksella. */
+function sijoitaPuomi(p, z) {
+  const kaistat = [-1, 0, 1].sort(() => Math.random() - 0.5);
+  for (const l of kaistat) {
+    const x = l * LANE_W;
+    /* Auto on ongelma vain, jos se ehtii saavuttaa puomin ennen kuin puomi
+       ohittaa kameran (z 12). Aika lasketaan hitaimmalla maailman
+       vauhdilla, joten arvio on varovainen. */
+    const aika = (12 - z) / Math.max(16, S.speed);
+    const autoTakana = cars.some(c => c.userData.lane === l &&
+      c.position.z < z + 8 && c.position.z > z - c.userData.speed * aika - 8);
+    const poimittava = [...cans, ...scoots].some(t =>
+      t.visible && Math.abs(t.position.x - x) < 0.5 && Math.abs(t.position.z - z) < 6);
+    if (!autoTakana && !poimittava) {
+      asetaTyyppi(p, Math.random() < 0.55 ? 'matala' : 'korkea');
+      p.userData.lane = l;
+      p.position.set(x, 0, z);
+      p.visible = true;
+      return;
+    }
+  }
+  p.visible = false;
+  p.position.set(0, 0, z);
+}
+
+function suljetutKaistat() {
+  return puomit.filter(p => p.visible && p.position.z < 12).map(p => p.userData.lane);
+}
+
 /* ---------- coins ---------- */
 const coinGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.1, 18);
 const coins = [];
@@ -983,7 +1348,9 @@ const S = {
   lane: 0, laneX: 0, y: 0, vy: 0, jumping: false, t: 0, shake: 0, gap: 12.5, boost: 0,
   scoots: 0,       /* varastossa olevat potkulaudat */
   ride: 0,         /* aktiivisen kyydin sekunnit jäljellä */
-  rideGrace: 0     /* lyhyt suoja kyydin päätyttyä, ettei sama auto osu heti uudelleen */
+  rideGrace: 0,    /* lyhyt suoja kyydin päätyttyä, ettei sama auto osu heti uudelleen */
+  kesto: 0,        /* juoksun kesto sekunteina; palvelin tarkistaa tuloksen sitä vasten */
+  roll: 0          /* kierähdyksen sekunnit jäljellä */
 };
 
 const ui = {
@@ -1002,21 +1369,57 @@ const ui = {
 };
 
 function start() {
+  /* verkko.js pitää pelin lukittuna, kunnes laitteella on nimimerkki */
+  if (document.body.classList.contains('tunnistamaton')) return;
+  if (document.body.classList.contains('taulu-auki')) return;
+  if (document.body.classList.contains('asetukset-auki')) return;
   cars.forEach((c, i) => { if (c.position.z > -60) { c.userData.lane = startLanes[i]; c.position.set(startLanes[i] * LANE_W, 0, -80 - i * 32); } });
+  puomit.forEach((p, i) => sijoitaPuomi(p, -140 - i * 110));
+  /* Liina liukuu etusivun paikaltaan keskikaistalle eikä hyppää */
+  S.laneX = ASETELMA.liina[0];
   ui.intro.style.opacity = '0';
   ui.intro.classList.add('pois');
   S.started = true;
+  document.dispatchEvent(new CustomEvent('liina:alku'));
 }
-function reset() {
+/* Rullaava maisema takaisin lähtöasemiin. Ilman tätä etusivulle
+   palattaessa kerrostalot olisivat siellä, mihin juoksu ne jätti, ja
+   peittäisivät etusivun asetelman. */
+function nollaaMaisema() {
+  sides.forEach(rivi => rivi.forEach((b, i) => { b.position.z = -i * SPACING - 12; }));
+  trees.forEach((t, i) => { t.position.z = -(i % 6) * 26 - 6; });
+  dashes.forEach((d, i) => { d.position.z = -(i % 46) * 6; });
+  nurmiTex.offset.y = 0;
+}
+
+function nollaaMaailma() {
+  nollaaMaisema();
+  S.kesto = 0;
   S.over = false; S.speed = 16; S.dist = 0; S.score = 0; S.coins = 0;
   S.lane = 0; S.laneX = 0; S.gap = 12.5; S.boost = 0;
-  S.scoots = 0; S.ride = 0; S.rideGrace = 0;
+  S.scoots = 0; S.ride = 0; S.rideGrace = 0; S.roll = 0;
   scoots.forEach((t, i) => { t.position.z = -110 - i * 150; t.visible = true; });
   cans.forEach((c, i) => { c.position.z = -60 - i * 120; c.visible = true; }); S.y = 0; S.vy = 0;
   cars.forEach((c, i) => { c.userData.lane = startLanes[i]; c.position.set(startLanes[i] * LANE_W, 0, -80 - i * 32); });
   coins.forEach((c, i) => { c.position.z = -8 - i * 5; c.visible = true; });
+  /* puomit vasta autojen ja poimittavien jälkeen, koska sijoitus tarkistaa ne */
+  puomit.forEach((p, i) => sijoitaPuomi(p, -140 - i * 110));
   ui.over.style.opacity = '0'; ui.over.classList.add('pois');
+}
+
+function reset() {
+  if (document.body.classList.contains('taulu-auki')) return;
+  nollaaMaailma();
   S.started = true;
+  document.dispatchEvent(new CustomEvent('liina:alku'));
+}
+
+/* Koti-ikoni: maailma nollataan ja peli palaa etusivun asetelmaan.
+   PELAA kutsuu sen jälkeen start()-funktiota kuten ensimmäisellä kerralla. */
+function palaaEtusivulle() {
+  nollaaMaailma();
+  S.started = false;
+  S.shake = 0;
 }
 
 function move(dir) {
@@ -1025,12 +1428,21 @@ function move(dir) {
 }
 function jump() {
   if (!S.started || S.over || S.jumping) return;
-  S.jumping = true; S.vy = 9.2;
+  S.roll = 0;                      /* hyppy katkaisee kierähdyksen */
+  S.jumping = true; S.vy = HYPPY_VY;
+}
+function roll() {
+  if (!S.started || S.over || S.roll > 0) return;
+  if (S.jumping) S.vy = -22;       /* ilmassa: syöksy maahan ja kierähdys heti */
+  S.roll = KIERI;
 }
 
 addEventListener('keydown', e => {
+  /* kirjoitus lomakkeeseen ei ohjaa peliä: välilyönti nimimerkissä ei hyppää */
+  if (e.target && e.target.closest && e.target.closest('input, textarea')) return;
   if (e.key === 'ArrowLeft' || e.key === 'a') move(-1);
   else if (e.key === 'ArrowRight' || e.key === 'd') move(1);
+  else if (e.key === 'ArrowDown' || e.key === 's') { e.preventDefault(); roll(); }
   else if (e.key === 'ArrowUp' || e.key === ' ' || e.key === 'w') { e.preventDefault(); if (!S.started) start(); else if (S.over) reset(); else jump(); }
   else if (e.key === 'Enter') { if (!S.started) start(); else if (S.over) reset(); }
 });
@@ -1046,8 +1458,8 @@ if (ui.scootBtn) {
 
 /* Ruutujen painikkeet: napautus toimii myös kosketuksella, ei vain näppäimistöllä. */
 function aloitaTaiJatka() { if (!S.started) start(); else if (S.over) reset(); }
-document.querySelectorAll('.screen .btn').forEach(b => {
-  b.addEventListener('click', e => { e.preventDefault(); aloitaTaiJatka(); });
+document.querySelectorAll('[data-pelaa]').forEach(b => {
+  b.addEventListener('click', e => { e.preventDefault(); e.currentTarget.blur(); aloitaTaiJatka(); });
 });
 
 let touch = null;
@@ -1060,6 +1472,7 @@ host.addEventListener('pointerup', e => {
   if (tap) { if (!S.started) start(); else if (S.over) reset(); else jump(); }
   else if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1);
   else if (dy < 0) jump();
+  else roll();
   touch = null;
 });
 
@@ -1091,6 +1504,7 @@ function tick() {
     S.speed = Math.min(31, S.speed + dt * 0.4);
     if (S.boost > 0) S.boost = Math.max(0, S.boost - dt);
     S.dist += S.speed * dt;
+    S.kesto += dt;
     S.score += S.speed * dt * 3;
     S.gap = Math.max(10.6, S.gap - dt * 0.06);
   }
@@ -1106,7 +1520,7 @@ function tick() {
 
   /* cars come toward the camera */
   for (const c of cars) {
-    c.position.z += (v + c.userData.speed) * dt;
+    if (S.started) c.position.z += (v + c.userData.speed) * dt;
     if (c.position.z > 22) respawnCar(c);
   }
 
@@ -1133,6 +1547,21 @@ function tick() {
     }
   }
 
+  /* nurmi liukuu maailman mukana, pilvet ajelehtivat */
+  nurmiTex.offset.y += v * dt / NURMI_RUUTU;
+  pilvet.rotation.y += dt * 0.004;
+
+  /* tietyöpuomit ovat paikallaan maailmassa */
+  for (const p of puomit) {
+    p.position.z += v * dt;
+    if (p.position.z > 12) {
+      const muut = puomit.filter(q => q !== p).map(q => q.position.z);
+      sijoitaPuomi(p, Math.min(-120, ...muut) - (110 + Math.random() * 90));
+    }
+    const palaa = Math.floor(S.t * 2.5) % 2 === 0;
+    for (const muoto of Object.values(p.userData.muodot)) for (const l of muoto.userData.lamput) l.visible = palaa;
+  }
+
   /* coins */
   for (const c of coins) {
     c.position.z += v * dt;
@@ -1146,7 +1575,7 @@ function tick() {
   /* player */
   S.laneX += (S.lane * LANE_W - S.laneX) * Math.min(1, dt * 12);
   if (S.jumping) {
-    S.vy -= 26 * dt; S.y += S.vy * dt;
+    S.vy -= PAINOVOIMA * dt; S.y += S.vy * dt;
     if (S.y <= 0) { S.y = 0; S.vy = 0; S.jumping = false; }
   }
   if (S.ride > 0) {
@@ -1154,6 +1583,7 @@ function tick() {
     if (S.ride === 0) S.rideGrace = 0.6;
   }
   if (S.rideGrace > 0) S.rideGrace = Math.max(0, S.rideGrace - dt);
+  if (S.roll > 0) S.roll = Math.max(0, S.roll - dt);
 
   const runPhase = S.t * (S.started && !S.over ? 13 : 5);
   const swing = Math.sin(runPhase);
@@ -1161,9 +1591,27 @@ function tick() {
   rideScoot.visible = riding;
   const lean = (S.lane * LANE_W - S.laneX) * -0.06;
 
-  if (riding) {
+  liina.group.rotation.y = 0;
+  if (!S.started) {
+    /* Etusivu: Liina seisoo kasvot kameraan päin, hieman Tervistä kohti
+       kääntyneenä, ja hengittää. */
+    const h = Math.sin(S.t * 1.8);
+    liina.group.scale.set(1, 1, 1);
+    liina.group.rotation.set(0, ASETELMA.liina[2], 0);
+    liina.group.position.set(ASETELMA.liina[0], Math.max(0, h) * 0.015, ASETELMA.liina[1]);
+    liina.legs[0].rotation.x = 0; liina.legs[0].rotation.z = 0.06;
+    liina.legs[1].rotation.x = 0; liina.legs[1].rotation.z = -0.06;
+    liina.arms[0].rotation.x = 0.06 * h; liina.arms[0].rotation.z = 0.14;
+    liina.arms[1].rotation.x = -0.06 * h; liina.arms[1].rotation.z = -0.14;
+  } else if (riding) {
     /* lievä aaltomainen mutkittelu kaistan sisällä, ei vaikuta kaistalogiikkaan */
     const w = Math.sin(S.t * 2.6);
+    /* kyydissä alas-pyyhkäisy painaa Liinan kyyryyn laudan päälle */
+    const kyyry = S.roll > 0 ? 0.3 : 1;          /* kyyryssä pää jää matalan palkin alle */
+    liina.group.scale.set(1, kyyry, 1);
+    rideScoot.scale.set(RIDE_K, RIDE_K / kyyry, RIDE_K);
+    rideScoot.position.y = -RIDE_H / kyyry;
+    liina.group.rotation.x = 0;
     liina.group.position.set(S.laneX + w * 0.26, S.y + RIDE_H, 0);
     liina.group.rotation.z = lean + Math.cos(S.t * 2.6) * -0.06;
     /* jalat kannella, toinen hieman edessä */
@@ -1173,7 +1621,34 @@ function tick() {
     liina.arms[0].rotation.x = 1.27; liina.arms[0].rotation.z = 0.21;
     liina.arms[1].rotation.x = 1.27; liina.arms[1].rotation.z = -0.21;
     rideScoot.rotation.y = Math.PI + Math.cos(S.t * 2.6) * 0.10;
+  } else if (S.roll > 0) {
+    /* Kierähdys kolmessa limittäisessä vaiheessa, jotta liike ei nytkähdä:
+         kumarrus  k 0.00–0.20  nojaus eteen, painuminen kasaan, raajat sykkyrään
+         kuperkeikka k 0.15–0.85  yksi pyörähdys, alku ja loppu hitaina
+         nousu     k 0.80–1.00  oikeneminen ja raajat takaisin juoksuun
+       Pyörähdys tehdään pallon keskipisteen ympäri: sijainti = keskipiste − R·c,
+       ja keskipiste laskee sitä mukaa kuin hahmo painuu kasaan. */
+    const k = 1 - S.roll / KIERI;
+    const pehmea = (a0, a1, x) => { const t = Math.min(1, Math.max(0, (x - a0) / (a1 - a0))); return t * t * (3 - 2 * t); };
+    const kumarrus = pehmea(0, 0.2, k);
+    const nousu = pehmea(0.8, 1, k);
+    const sykkyra = kumarrus * (1 - nousu);
+    const kierros = pehmea(0.15, 0.85, k);
+    const a = -Math.PI * 2 * kierros - 0.55 * sykkyra * (1 - kierros);
+    const litistys = 1 - 0.55 * sykkyra;      /* pallo 1,1 m, matala palkki alkaa 1,2 m */
+    const c = 1.1 + (0.55 - 1.1) * sykkyra;
+    liina.group.scale.set(1, litistys, 1);
+    liina.group.rotation.x = a;
+    liina.group.rotation.z = lean * (1 - sykkyra);
+    liina.group.position.set(S.laneX, S.y + c - c * Math.cos(a), -c * Math.sin(a));
+    const kohti = (juoksu, pallo) => juoksu + (pallo - juoksu) * sykkyra;
+    liina.legs[0].rotation.x = kohti(swing * 1.05, 1.5); liina.legs[0].rotation.z = 0;
+    liina.legs[1].rotation.x = kohti(-swing * 1.05, 1.5); liina.legs[1].rotation.z = 0;
+    liina.arms[0].rotation.x = kohti(-swing * 0.95, 1.9); liina.arms[0].rotation.z = 0.25 * sykkyra;
+    liina.arms[1].rotation.x = kohti(swing * 0.95, 1.9); liina.arms[1].rotation.z = -0.25 * sykkyra;
   } else {
+    liina.group.scale.set(1, 1, 1);
+    liina.group.rotation.x = 0;
     liina.group.position.set(S.laneX, S.y, 0);
     liina.group.rotation.z = lean;
     liina.legs[0].rotation.x = swing * 1.05; liina.legs[0].rotation.z = 0;
@@ -1184,18 +1659,38 @@ function tick() {
   }
 
   const tSwing = Math.sin(runPhase * 0.92 + 1.2);
-  tervis.group.position.z = S.over ? Math.max(3.4, tervis.group.position.z - dt * 5) : S.gap;
-  tervis.group.position.x += ((S.laneX * 0.7) - tervis.group.position.x) * Math.min(1, dt * 3);
-  tervis.legs[0].rotation.x = tSwing * 1.0;
-  tervis.legs[1].rotation.x = -tSwing * 1.0;
-  tervis.arms[0].rotation.x = -tSwing * 0.8;
-  tervis.arms[1].rotation.x = tSwing * 0.5;
-  tervis.group.position.y = Math.abs(Math.cos(runPhase * 0.92)) * 0.06;
+  if (!S.started) {
+    /* Etusivu: Tervis Liinan vierellä hieman takana, siemailee maitokahvia. */
+    const siemaus = 0.5 + 0.5 * Math.sin(S.t * 0.9);
+    tervis.group.position.set(ASETELMA.tervis[0], Math.max(0, Math.sin(S.t * 1.6 + 1)) * 0.012, ASETELMA.tervis[1]);
+    tervis.group.rotation.y = ASETELMA.tervis[2];
+    tervis.legs[0].rotation.x = 0; tervis.legs[1].rotation.x = 0;
+    tervis.arms[0].rotation.x = 0.04;
+    tervis.arms[1].rotation.x = 0.55 + siemaus * 0.55;
+  } else {
+    tervis.group.rotation.y = 0;
+    const tavoiteZ = S.over ? Math.max(3.4, tervis.group.position.z - dt * 5) : S.gap;
+    /* lähtiessä Tervis siirtyy etusivun paikaltaan jahtiin liukuen, ei hypäten */
+    tervis.group.position.z += (tavoiteZ - tervis.group.position.z) * (S.over ? 1 : Math.min(1, dt * 2.5));
+    tervis.group.position.x += ((S.laneX * 0.7) - tervis.group.position.x) * Math.min(1, dt * 3);
+    tervis.legs[0].rotation.x = tSwing * 1.0;
+    tervis.legs[1].rotation.x = -tSwing * 1.0;
+    tervis.arms[0].rotation.x = -tSwing * 0.8;
+    tervis.arms[1].rotation.x = tSwing * 0.5;
+    tervis.group.position.y = Math.abs(Math.cos(runPhase * 0.92)) * 0.06;
+  }
 
   /* collisions */
   if (S.started && !S.over && S.rideGrace <= 0) {
-    for (const c of cars) {
-      if (Math.abs(c.position.z) < (c.userData.len || 4.6) / 2 + 0.5 && Math.abs(c.position.x - S.laneX) < 1.2 && S.y < 1.5) {
+    const osuiAutoon = cars.some(c =>
+      Math.abs(c.position.z) < (c.userData.len || 4.6) / 2 + 0.5 && Math.abs(c.position.x - S.laneX) < 1.2);
+    /* Autojen yli ei hypätä: katot (2,30 m+) ovat hypyn huipun yläpuolella. */
+    /* Kierähdys vie kummankin puomin ali. Matalan yli pääsee, kun jalat ovat
+       palkin yläpinnan yläpuolella; korkean yli hyppy ei ylety. */
+    const osuiPuomiin = S.roll <= 0 && puomit.some(p =>
+      p.visible && Math.abs(p.position.z) < 0.7 && Math.abs(p.position.x - S.laneX) < 1.0 &&
+      !(p.userData.tyyppi === 'matala' && S.y > PUOMI.matala.yla));
+    if (osuiAutoon || osuiPuomiin) {
         if (S.ride > 0) {
           /* potkulauta on lisäelämä: kyyti katkeaa, peli jatkuu */
           S.ride = 0; S.rideGrace = 1.2; S.shake = 0.3;
@@ -1203,9 +1698,11 @@ function tick() {
           S.over = true; S.shake = 0.5;
           ui.over.style.opacity = '1'; ui.over.classList.remove('pois');
           ui.overText.textContent = 'Tervis sai kiinni · ' + Math.round(S.dist) + '\u00a0m';
+          /* valikko.js tallentaa tuloksen ja päättää, onko kyse ennätyksestä */
+          document.dispatchEvent(new CustomEvent('liina:loppu', { detail: {
+            pisteet: Math.round(S.score), matka: Math.round(S.dist), kesto: +S.kesto.toFixed(2)
+          } }));
         }
-        break;
-      }
     }
   }
 
@@ -1216,11 +1713,16 @@ function tick() {
   /* camera */
   const camTarget = S.started
     ? new THREE.Vector3(S.laneX * 0.3, 4.2 + S.y * 0.25, 9.8)
-    : new THREE.Vector3(2.6, 5.2, -15);
+    : new THREE.Vector3(...ASETELMA.kamera);
   camera.position.lerp(camTarget, Math.min(1, dt * 2.4));
+  const tavoiteFov = S.started ? 72 : ASETELMA.fov;
+  if (Math.abs(camera.fov - tavoiteFov) > 0.01) {
+    camera.fov += (tavoiteFov - camera.fov) * Math.min(1, dt * 2.4);
+    camera.updateProjectionMatrix();
+  }
   const look = S.started
     ? new THREE.Vector3(S.laneX * 0.18, 1.4 + S.y * 0.45, -12)
-    : new THREE.Vector3(0, 5.2, 14);
+    : new THREE.Vector3(...ASETELMA.katse);
   if (S.shake > 0) {
     S.shake -= dt;
     look.x += (Math.random() - 0.5) * 0.6;
@@ -1261,5 +1763,5 @@ function tick() {
 }
 scene.add(sun.target);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => texRegistry.forEach(f => f()));
-window.__liina = { camera, scene, S, museo, mascot, liina, tervis, cars, cans, coins, scoots, rideScoot, kaytaScootti, liikeSlot, liikeMuodot, valitseLiike };
+window.__liina = { camera, scene, S, museo, get museoMalli() { return museoMalli; }, mascot, liina, tervis, cars, cans, coins, scoots, rideScoot, kaytaScootti, palaaEtusivulle, ASETELMA, puomit, roll, sijoitaPuomi, asetaTyyppi, PUOMI, liikeSlot, liikeMuodot, valitseLiike };
 tick();

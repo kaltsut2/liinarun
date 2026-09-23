@@ -2,7 +2,7 @@
 
 Kaikki mitä Claude Code tarvitsee pelin ulkoasun ja maailman rakentamiseen.
 Peli on Subway Surfers -tyyppinen kolmen kaistan endless runner, joka sijoittuu
-Lahden Rauhankadulle: Liina juoksee Museon edestä kohti Mascotin (S-market) ovea,
+Lahden Kirkkokadulle: Liina juoksee Museon edestä kohti Mascotin (S-market) ovea,
 ja yhteiskuntaopin ja historian lehtori Tervis jahtaa häntä.
 
 ## Paketin sisältö

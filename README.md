@@ -1,6 +1,6 @@
 # Liina juoksee Mascotiin
 
-Kolmen kaistan endless runner Lahden Rauhankadulla. Liina juoksee Museon edestä
+Kolmen kaistan endless runner Lahden Kirkkokadulla. Liina juoksee Museon edestä
 kohti Mascotin ovea, ja yhteiskuntaopin ja historian lehtori Tervis jahtaa takaa.
 three.js, proseduraalinen cartoon-geometria, ei buildia.
 
@@ -79,6 +79,34 @@ takaa katsottaessa vartalon taakse eikä ajoasento lue lainkaan.
 Uusi roolisävy `#76c043` on kirjattu `tokens.json`iin ja `handoff/ART_DIRECTION.md`iin
 tyylisopimuksen luvun 9 mukaisesti. Se on varattu korostus Liinan kuparin ja NOCCOn
 oranssin tapaan: tausta-elementit eivät käytä sitä.
+
+## Kierähdys ja tietyöpuomi
+
+Alas-pyyhkäisy tai ↓ kierähtää: Liina käpertyy palloksi ja tekee yhden kuperkeikan
+eteenpäin (0,7 s). Ilmassa alas-pyyhkäisy syöksyy maahan ja kierähtää heti, ja
+ylös-pyyhkäisy katkaisee kierähdyksen hyppyyn. Potkulaudalla sama liike painaa
+Liinan kyyryyn laudan päälle.
+
+**Tietyöpuomeja on kaksi.** Kumpikin sulkee yhden kaistan, ja kummankin ali pääsee
+kierähtämällä (pallo on 1,1 m korkea).
+
+| | Palkki | Ohitus |
+|---|---|---|
+| Matala | 1,20–1,40 m | kierähdys ali tai hyppy yli — jalkojen pitää olla palkin yläpuolella, ikkuna noin 0,27 s |
+| Korkea | 1,45–1,80 m, kyltti 2,6 m asti | vain kierähdys; hyppy nousee 1,63 m eikä ylety |
+
+Korkean kyltissä on kumileimasimella vinoon lyöty *V\*\*\*u mikä työmaa* — merkki
+merkilleen tässä muodossa, tarkoituksellinen poikkeus maailman kylttien versaalisäännöstä.
+Potkulaudalla ilman kyyryä puomi vie laudan lisäelämänä, kuten autokin.
+
+Raidat (`#fb8500` ja `#ffffff`) piirretään `MeshBasicMaterial`illa, koska toon-
+varjostus tummentaisi kirkkaan valkoisen harmaaksi. Tyylisopimus sallii tämän
+kylteille, ja se vastaa oikean tietyömerkin heijastavaa pintaa.
+
+Tietyö sulkee kaistan myös liikenteeltä. Autot ajavat puomia nopeammin, joten
+samalla kaistalla ne ajaisivat sen läpi. Puomi sijoitetaan siksi vain kaistalle,
+jolla ei ole autoa, joka ehtisi saavuttaa sen ennen kuin puomi ohittaa kameran, ja
+`respawnCar()` laskee suljetut kaistat varatuiksi.
 
 ## Ennen kuin muutat mitään
 
