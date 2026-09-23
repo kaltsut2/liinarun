@@ -89,6 +89,42 @@ insert into public.kielletyt_sanat (sana) values
   ('cunt'), ('nigg'), ('bitch'), ('whore'), ('penis'), ('pussy')
 on conflict do nothing;
 
+-- Jahtaajat ja niiden hinnat kolikoina. Tervis on ilmainen ja kaikilla
+-- valmiiksi. Rivi, jonka saatavilla on false, näkyy kaupassa mutta sitä
+-- ei voi vielä ostaa. Hinnat ja nimet voi vaihtaa ajamalla tiedoston
+-- uudelleen: olemassa olevat rivit päivitetään.
+create table if not exists public.jahtaajat (
+  id          text primary key,
+  nimi        text not null,
+  hinta       integer not null check (hinta >= 0),
+  jarjestys   smallint not null,
+  saatavilla  boolean not null default true
+);
+insert into public.jahtaajat (id, nimi, hinta, jarjestys, saatavilla) values
+  ('tervis',     'Tervis',        0, 1, true),
+  ('queen_mari', 'Queen Mari',  300, 2, true),
+  ('sarra',      'Sarra',       600, 3, true),
+  ('tyhja',      'Tulossa',     900, 4, false),
+  ('nina',       'Nina',       1200, 5, true)
+on conflict (id) do update
+  set nimi = excluded.nimi, hinta = excluded.hinta,
+      jarjestys = excluded.jarjestys, saatavilla = excluded.saatavilla;
+
+-- Pelaajan tili: kolikot, varastossa olevat potkulaudat (enintään 5) ja
+-- valittu jahtaaja. Lisätään sarakkeina, jotta vanhat pelaajat säilyvät.
+alter table public.pelaajat add column if not exists kolikot integer not null default 0 check (kolikot >= 0);
+alter table public.pelaajat add column if not exists potkulaudat smallint not null default 0 check (potkulaudat between 0 and 5);
+alter table public.pelaajat add column if not exists jahtaaja text not null default 'tervis' references public.jahtaajat (id);
+alter table public.tulokset add column if not exists kolikot integer not null default 0;
+
+-- Ostetut jahtaajat. Ilmaisia (hinta 0) ei tarvitse ostaa.
+create table if not exists public.omistetut_jahtaajat (
+  pelaaja_id  uuid not null references public.pelaajat (id) on delete cascade,
+  jahtaaja    text not null references public.jahtaajat (id),
+  ostettu     timestamptz not null default now(),
+  primary key (pelaaja_id, jahtaaja)
+);
+
 -- Tulostaulun versio. Yksi rivi, jonka luku kasvaa aina kun joku
 -- tulos taulussa muuttuu. Peli seuraa tätä riviä Realtimella ja hakee
 -- tulostaulun uudelleen. Näin itse pelaajataulua ei tarvitse avata
@@ -117,6 +153,8 @@ alter table public.kirjautumisyritykset enable row level security;
 alter table public.tulokset             enable row level security;
 alter table public.kielletyt_sanat      enable row level security;
 alter table public.tulostaulu_versio    enable row level security;
+alter table public.jahtaajat            enable row level security;
+alter table public.omistetut_jahtaajat  enable row level security;
 
 drop policy if exists "versio luku" on public.tulostaulu_versio;
 create policy "versio luku" on public.tulostaulu_versio
@@ -124,7 +162,8 @@ create policy "versio luku" on public.tulostaulu_versio
 
 revoke all on public.pelaajat, public.pelaaja_pin, public.istunnot,
               public.kirjautumisyritykset, public.tulokset,
-              public.kielletyt_sanat, public.tulostaulu_versio
+              public.kielletyt_sanat, public.tulostaulu_versio,
+              public.jahtaajat, public.omistetut_jahtaajat
   from anon, authenticated;
 grant select on public.tulostaulu_versio to anon, authenticated;
 
@@ -242,6 +281,31 @@ begin
 end;
 $$;
 
+-- Pelaajan tili pelille: kolikot, potkulaudat ja valittu jahtaaja.
+create or replace function public._tili(p_pelaaja uuid)
+returns json
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select json_build_object('kolikot', kolikot, 'potkulaudat', potkulaudat, 'jahtaaja', jahtaaja)
+    from public.pelaajat where id = p_pelaaja;
+$$;
+
+-- Omistaako pelaaja jahtaajan: ilmaiset kaikilla, muut ostettuina.
+create or replace function public._omistaa(p_pelaaja uuid, p_jahtaaja text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (select 1 from public.jahtaajat where id = p_jahtaaja and hinta = 0)
+      or exists (select 1 from public.omistetut_jahtaajat
+                  where pelaaja_id = p_pelaaja and jahtaaja = p_jahtaaja);
+$$;
+
 -- Pelaajan sija: kuinka monella on parempi tulos, plus yksi.
 -- Tasapisteissä sama sija.
 create or replace function public._sija(p_paras integer)
@@ -293,12 +357,12 @@ begin
   insert into public.pelaaja_pin (pelaaja_id, pin_tiiviste)
   values (v_pelaaja, extensions.crypt(p_pin, extensions.gen_salt('bf', 8)));
 
-  return json_build_object(
+  return (json_build_object(
     'tunnus',     public._uusi_istunto(v_pelaaja),
     'nimimerkki', v_nimi,
     'paras',      0,
     'sija',       null
-  );
+  )::jsonb || public._tili(v_pelaaja)::jsonb)::json;
 end;
 $$;
 
@@ -345,12 +409,12 @@ begin
     return json_build_object('virhe', 'VIRHEELLINEN_TUNNUS');
   end if;
 
-  return json_build_object(
+  return (json_build_object(
     'tunnus',     public._uusi_istunto(v_rivi.id),
     'nimimerkki', v_rivi.nimimerkki,
     'paras',      v_rivi.paras,
     'sija',       public._sija(v_rivi.paras)
-  );
+  )::jsonb || public._tili(v_rivi.id)::jsonb)::json;
 end;
 $$;
 
@@ -368,28 +432,40 @@ declare
   v_rivi    record;
 begin
   select nimimerkki, paras into v_rivi from public.pelaajat where id = v_pelaaja;
-  return json_build_object(
+  return (json_build_object(
     'nimimerkki', v_rivi.nimimerkki,
     'paras',      v_rivi.paras,
     'sija',       public._sija(v_rivi.paras)
-  );
+  )::jsonb || public._tili(v_pelaaja)::jsonb)::json;
 end;
 $$;
 
--- Suorituksen tallennus. Tarkistaa uskottavuuden ja päivittää
--- ennätyksen, jos tulos on parempi kuin aiempi.
+-- Suorituksen tallennus. Tarkistaa uskottavuuden, päivittää ennätyksen,
+-- lisää juoksun kolikot tilille ja päivittää potkulautavaraston.
 --
 -- Rajat tulevat pelin fysiikasta:
 --   vauhti on enintään 31 m/s          → matka ≤ kesto × 31 + 10
 --   metriltä 3 pistettä, kolikoista
 --   boostilla enintään noin 15/m,
 --   tölkit ja laudat noin 2/m          → pisteet ≤ matka × 22 + 500
--- Lisäksi kahden tallennuksen välissä on oltava vähintään 1,5 s.
+--   kolikko viiden metrin välein,
+--   boostilla kaksinkertaisena         → kolikot ≤ matka × 0,4 + 20
+--   potkulauta noin 140 m välein       → kerätyt laudat ≤ matka / 130 + 2
+-- Käytettyjä lautoja ei voi olla enempää kuin varastossa oli ja juoksulla
+-- kerättiin. Varastoon jää enintään viisi. Kahden tallennuksen välissä on
+-- oltava vähintään 1,5 s.
+--
+-- Vanha neliparametrinen versio poistetaan, jotta kutsu ei ole
+-- kaksiselitteinen; uudet parametrit ovat valinnaisia.
+drop function if exists public.tallenna_tulos(text, integer, integer, numeric);
 create or replace function public.tallenna_tulos(
-  p_tunnus  text,
-  p_pisteet integer,
-  p_matka   integer,
-  p_kesto   numeric
+  p_tunnus          text,
+  p_pisteet         integer,
+  p_matka           integer,
+  p_kesto           numeric,
+  p_kolikot         integer default 0,
+  p_laudat_keratyt  integer default 0,
+  p_laudat_kaytetyt integer default 0
 )
 returns json
 language plpgsql
@@ -399,7 +475,7 @@ set search_path = public, pg_temp
 as $$
 declare
   v_pelaaja   uuid := public._pelaaja_tunnuksella(p_tunnus);
-  v_edellinen integer;
+  v_rivi      record;
   v_uusi      boolean;
   v_paras     integer;
 begin
@@ -408,7 +484,10 @@ begin
      or p_matka   < 0 or p_matka   > 1000000
      or p_kesto   < 0.5 or p_kesto > 36000
      or p_matka   > p_kesto * 31 + 10
-     or p_pisteet > p_matka * 22 + 500 then
+     or p_pisteet > p_matka * 22 + 500
+     or coalesce(p_kolikot, 0) < 0 or coalesce(p_kolikot, 0) > p_matka * 0.4 + 20
+     or coalesce(p_laudat_keratyt, 0) < 0 or coalesce(p_laudat_keratyt, 0) > p_matka / 130.0 + 2
+     or coalesce(p_laudat_kaytetyt, 0) < 0 then
     raise exception 'TULOS_HYLATTY';
   end if;
 
@@ -418,25 +497,116 @@ begin
     raise exception 'TULOS_HYLATTY';
   end if;
 
-  insert into public.tulokset (pelaaja_id, pisteet, matka, kesto)
-  values (v_pelaaja, p_pisteet, p_matka, p_kesto);
+  select paras, potkulaudat into v_rivi from public.pelaajat where id = v_pelaaja for update;
 
-  select paras into v_edellinen from public.pelaajat where id = v_pelaaja for update;
-  v_uusi := p_pisteet > v_edellinen;
+  if coalesce(p_laudat_kaytetyt, 0) > v_rivi.potkulaudat + coalesce(p_laudat_keratyt, 0) then
+    raise exception 'TULOS_HYLATTY';
+  end if;
 
+  insert into public.tulokset (pelaaja_id, pisteet, matka, kesto, kolikot)
+  values (v_pelaaja, p_pisteet, p_matka, p_kesto, coalesce(p_kolikot, 0));
+
+  v_uusi := p_pisteet > v_rivi.paras;
+
+  update public.pelaajat
+     set kolikot     = kolikot + coalesce(p_kolikot, 0),
+         potkulaudat = least(5, potkulaudat + coalesce(p_laudat_keratyt, 0) - coalesce(p_laudat_kaytetyt, 0))
+   where id = v_pelaaja;
+
+  -- Ennätys omana päivityksenään, jotta tulostaulun versio kasvaa vain
+  -- silloin kun ennätys oikeasti muuttuu.
   if v_uusi then
     update public.pelaajat
        set paras = p_pisteet, paras_aika = now()
      where id = v_pelaaja;
   end if;
 
-  v_paras := greatest(v_edellinen, p_pisteet);
-  return json_build_object(
+  v_paras := greatest(v_rivi.paras, p_pisteet);
+  return (json_build_object(
     'uusi_ennatys', v_uusi,
-    'edellinen',    v_edellinen,
+    'edellinen',    v_rivi.paras,
     'paras',        v_paras,
     'sija',         public._sija(v_paras)
-  );
+  )::jsonb || public._tili(v_pelaaja)::jsonb)::json;
+end;
+$$;
+
+-- Kaupan tiedot: tili ja kaikki jahtaajat järjestyksessä, tieto siitä
+-- mitkä pelaaja omistaa.
+create or replace function public.kauppa(p_tunnus text)
+returns json
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_pelaaja uuid := public._pelaaja_tunnuksella(p_tunnus);
+begin
+  return (public._tili(v_pelaaja)::jsonb || jsonb_build_object('jahtaajat', (
+    select jsonb_agg(jsonb_build_object(
+             'id', j.id, 'nimi', j.nimi, 'hinta', j.hinta, 'saatavilla', j.saatavilla,
+             'omistettu', public._omistaa(v_pelaaja, j.id))
+           order by j.jarjestys)
+      from public.jahtaajat j)))::json;
+end;
+$$;
+
+-- Jahtaajan osto. Saldo tarkistetaan ja veloitetaan samassa
+-- transaktiossa lukitun pelaajarivin kanssa, joten samaa kolikkoa ei voi
+-- käyttää kahdesti. Ostettu jahtaaja valitaan samalla.
+-- Virheet palautetaan {"virhe": ...}-vastauksena.
+create or replace function public.osta_jahtaaja(p_tunnus text, p_jahtaaja text)
+returns json
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_pelaaja uuid := public._pelaaja_tunnuksella(p_tunnus);
+  v_j       record;
+  v_kolikot integer;
+begin
+  select hinta, saatavilla into v_j from public.jahtaajat where id = p_jahtaaja;
+  if not found or not v_j.saatavilla then
+    return json_build_object('virhe', 'EI_SAATAVILLA');
+  end if;
+  if public._omistaa(v_pelaaja, p_jahtaaja) then
+    return json_build_object('virhe', 'JO_OMISTETTU');
+  end if;
+
+  select kolikot into v_kolikot from public.pelaajat where id = v_pelaaja for update;
+  if v_kolikot < v_j.hinta then
+    return json_build_object('virhe', 'EI_KOLIKOITA');
+  end if;
+
+  update public.pelaajat
+     set kolikot = kolikot - v_j.hinta, jahtaaja = p_jahtaaja
+   where id = v_pelaaja;
+  insert into public.omistetut_jahtaajat (pelaaja_id, jahtaaja)
+  values (v_pelaaja, p_jahtaaja);
+
+  return public._tili(v_pelaaja);
+end;
+$$;
+
+-- Jahtaajan valinta omistettujen joukosta.
+create or replace function public.valitse_jahtaaja(p_tunnus text, p_jahtaaja text)
+returns json
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_pelaaja uuid := public._pelaaja_tunnuksella(p_tunnus);
+begin
+  if not public._omistaa(v_pelaaja, p_jahtaaja) then
+    return json_build_object('virhe', 'EI_OMISTETTU');
+  end if;
+  update public.pelaajat set jahtaaja = p_jahtaaja where id = v_pelaaja;
+  return public._tili(v_pelaaja);
 end;
 $$;
 
@@ -543,7 +713,7 @@ $$;
 --  Funktioiden oikeudet
 --
 --  PostgreSQL antaa funktioille oletuksena suoritusoikeuden kaikille,
---  joten kaikki suljetaan ensin ja pelille avataan vain viisi.
+--  joten kaikki suljetaan ensin ja pelille avataan vain tarvittavat.
 -- ---------------------------------------------------------------
 
 revoke all on function public._tulostaulu_muuttui()          from public, anon, authenticated;
@@ -552,18 +722,26 @@ revoke all on function public._tarkista_nimi(text)           from public, anon, 
 revoke all on function public._uusi_istunto(uuid)            from public, anon, authenticated;
 revoke all on function public._pelaaja_tunnuksella(text)     from public, anon, authenticated;
 revoke all on function public._sija(integer)                 from public, anon, authenticated;
+revoke all on function public._tili(uuid)                    from public, anon, authenticated;
+revoke all on function public._omistaa(uuid, text)           from public, anon, authenticated;
 revoke all on function public.nollaa_pin(text, text)         from public, anon, authenticated;
 revoke all on function public.rekisteroidy(text, text)       from public, anon, authenticated;
 revoke all on function public.kirjaudu(text, text)           from public, anon, authenticated;
 revoke all on function public.oma_tila(text)                 from public, anon, authenticated;
-revoke all on function public.tallenna_tulos(text, integer, integer, numeric) from public, anon, authenticated;
+revoke all on function public.tallenna_tulos(text, integer, integer, numeric, integer, integer, integer) from public, anon, authenticated;
+revoke all on function public.kauppa(text)                   from public, anon, authenticated;
+revoke all on function public.osta_jahtaaja(text, text)      from public, anon, authenticated;
+revoke all on function public.valitse_jahtaaja(text, text)   from public, anon, authenticated;
 revoke all on function public.tulostaulu(text)               from public, anon, authenticated;
 revoke all on function public.kirjaudu_ulos(text)            from public, anon, authenticated;
 
 grant execute on function public.rekisteroidy(text, text)       to anon, authenticated;
 grant execute on function public.kirjaudu(text, text)           to anon, authenticated;
 grant execute on function public.oma_tila(text)                 to anon, authenticated;
-grant execute on function public.tallenna_tulos(text, integer, integer, numeric) to anon, authenticated;
+grant execute on function public.tallenna_tulos(text, integer, integer, numeric, integer, integer, integer) to anon, authenticated;
+grant execute on function public.kauppa(text)                   to anon, authenticated;
+grant execute on function public.osta_jahtaaja(text, text)      to anon, authenticated;
+grant execute on function public.valitse_jahtaaja(text, text)   to anon, authenticated;
 grant execute on function public.tulostaulu(text)               to anon, authenticated;
 grant execute on function public.kirjaudu_ulos(text)            to anon, authenticated;
 

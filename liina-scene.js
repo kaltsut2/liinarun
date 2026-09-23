@@ -1357,7 +1357,7 @@ const KIERI = 0.7;
    lähtö juoksuun on luonnollinen. [x, z, kierto] ja [x, y, z]. */
 const ASETELMA = {
   liina: [-1.0, 0, -0.3],
-  tervis: [1.3, 0.95, 0.3],        /* hieman Liinan takana vasemmalla */
+  tervis: [1.9, 2.1, 0.36],        /* Liinan takana vasemmalla, Kauppa-nappi jalkojen alla */
   /* kamera ylhäällä ja hieman alaspäin suunnattuna, dronemaisesti */
   kamera: [0.1, 3.7, -4.9],
   katse: [0.1, 0.9, 4],
@@ -1368,6 +1368,22 @@ const ASETELMA = {
 };
 camera.fov = ASETELMA.fov;
 camera.updateProjectionMatrix();
+
+/* Kauppa: kamera kääntyy etusivulta jahtaajaan ja lähentyy, samalla kun
+   Liina hölkkää rauhallisesti kameran ohi oikealta pois kuvasta.
+   Suljettaessa sama takaperin: Liina palaa paikalleen ja kääntyy.
+   kauppaK on kameran siirtymä ja liinaT Liinan reitti, kumpikin 0–1. */
+const KAUPPA = {
+  kamera: [1.55, 2.55, -3.7],
+  katse: [1.9, 1.4, 2.1],
+  fov: 62,
+  kameraKesto: 1.7,               /* s */
+  liinaLoppu: [-3.4, -7.8],       /* [x, z] kameran takana oikealla */
+  liinaKesto: 2.1                 /* s, noin 3,6 m/s eli rauhallinen hölkkä */
+};
+let kauppaAuki = false, kauppaK = 0, liinaT = 0, liinaKaanto = ASETELMA.liina[2], liinaVaihe = 0;
+const pehmeasti = t => t * t * (3 - 2 * t);
+document.addEventListener('liina:kauppa', e => { if (!S.started) kauppaAuki = !!e.detail.auki; });
 /* Hyppy nousee 2,10 m (vy²/2g) ja kestää 0,73 s. Alkuperäinen 9,2 / 26
    nousi 1,63 m, mikä ei riittänyt korotetun matalan puomin yli. */
 const HYPPY_VY = 11.6, PAINOVOIMA = 32;
@@ -1545,10 +1561,14 @@ for (let i = 0; i < 26; i++) {
 }
 
 /* ---------- state ---------- */
+/* Pelaajan tilillä olevat potkulaudat: jokainen juoksu alkaa niillä. */
+let varastoLaudat = 0;
 const S = {
   started: false, over: false, speed: 16, dist: 0, score: 0, coins: 0,
   lane: 0, laneX: 0, y: 0, vy: 0, jumping: false, t: 0, shake: 0, gap: 12.5, boost: 0,
   scoots: 0,       /* varastossa olevat potkulaudat */
+  laudatKeratyt: 0,  /* juoksulla kerätyt ja käytetyt laudat; palvelin päivittää */
+  laudatKaytetyt: 0, /* niiden perusteella tilin varaston */
   ride: 0,         /* aktiivisen kyydin sekunnit jäljellä */
   rideGrace: 0,    /* lyhyt suoja kyydin päätyttyä, ettei sama auto osu heti uudelleen */
   kesto: 0,        /* juoksun kesto sekunteina; palvelin tarkistaa tuloksen sitä vasten */
@@ -1558,6 +1578,7 @@ const S = {
 const ui = {
   score: document.getElementById('score'),
   coins: document.getElementById('coins'),
+  kauppa: document.getElementById('avaaKauppa'),
   meters: document.getElementById('meters'),
   bar: document.getElementById('bar'),
   gap: document.getElementById('gap'),
@@ -1576,6 +1597,7 @@ function start() {
   if (document.body.classList.contains('taulu-auki')) return;
   if (document.body.classList.contains('asetukset-auki')) return;
   if (document.body.classList.contains('ohjeet-auki')) return;
+  if (document.body.classList.contains('kauppa-auki')) return;
   cars.forEach((c, i) => { if (c.position.z > -60) { c.userData.lane = startLanes[i]; c.position.set(startLanes[i] * LANE_W, 0, -80 - i * 32); } });
   puomit.forEach((p, i) => sijoitaPuomi(p, -140 - i * 110));
   /* Liina liukuu etusivun paikaltaan keskikaistalle eikä hyppää */
@@ -1600,7 +1622,8 @@ function nollaaMaailma() {
   S.kesto = 0;
   S.over = false; S.speed = 16; S.dist = 0; S.score = 0; S.coins = 0;
   S.lane = 0; S.laneX = 0; S.gap = 12.5; S.boost = 0;
-  S.scoots = 0; S.ride = 0; S.rideGrace = 0; S.roll = 0;
+  S.scoots = varastoLaudat; S.laudatKeratyt = 0; S.laudatKaytetyt = 0;
+  S.ride = 0; S.rideGrace = 0; S.roll = 0;
   scoots.forEach((t, i) => { t.position.z = -110 - i * 150; t.visible = true; });
   cans.forEach((c, i) => { c.position.z = -60 - i * 120; c.visible = true; }); S.y = 0; S.vy = 0;
   cars.forEach((c, i) => { c.userData.lane = startLanes[i]; c.position.set(startLanes[i] * LANE_W, 0, -80 - i * 32); });
@@ -1619,6 +1642,14 @@ function reset() {
 
 /* Koti-ikoni: maailma nollataan ja peli palaa etusivun asetelmaan.
    PELAA kutsuu sen jälkeen start()-funktiota kuten ensimmäisellä kerralla. */
+const jalat = new THREE.Vector3();
+
+/* valikko.js kertoo tilin potkulautamäärän aina kun se muuttuu */
+document.addEventListener('liina:varasto', e => {
+  varastoLaudat = Math.max(0, Math.min(5, e.detail.potkulaudat | 0));
+  if (!S.started) S.scoots = varastoLaudat;
+});
+
 function palaaEtusivulle() {
   nollaaMaailma();
   S.started = false;
@@ -1654,7 +1685,7 @@ addEventListener('keydown', e => {
 /* Potkulaudan aktivointi: kuluttaa yhden varastosta ja antaa 10 sekunnin kyydin. */
 function kaytaScootti() {
   if (!S.started || S.over || S.ride > 0 || S.scoots <= 0) return;
-  S.scoots--; S.ride = 10;
+  S.scoots--; S.laudatKaytetyt++; S.ride = 10;
 }
 if (ui.scootBtn) {
   ui.scootBtn.addEventListener('click', e => { e.preventDefault(); kaytaScootti(); });
@@ -1747,7 +1778,7 @@ function tick() {
       t.position.x = (Math.floor(Math.random() * 3) - 1) * LANE_W;
     }
     if (t.visible && Math.abs(t.position.z) < 1.6 && Math.abs(t.position.x - S.laneX) < 1.2 && S.y < 1.8) {
-      t.visible = false; S.scoots++; S.score += 75;
+      t.visible = false; S.scoots++; S.laudatKeratyt++; S.score += 75;
     }
   }
 
@@ -1798,15 +1829,41 @@ function tick() {
   liina.group.rotation.y = 0;
   if (!S.started) {
     /* Etusivu: Liina seisoo kasvot kameraan päin, hieman Tervistä kohti
-       kääntyneenä, ja hengittää. */
-    const h = Math.sin(S.t * 1.8);
+       kääntyneenä, ja hengittää. Kaupan auetessa hän hölkkää reittiä
+       pitkin kameran ohi ja suljettaessa takaisin. */
+    const tavoite = kauppaAuki ? 1 : 0;
+    const askel = dt / KAUPPA.liinaKesto;
+    const liikkuu = liinaT !== tavoite;
+    liinaT = tavoite > liinaT ? Math.min(1, liinaT + askel) : Math.max(0, liinaT - askel);
+    const r = pehmeasti(liinaT);
+    const x = ASETELMA.liina[0] + (KAUPPA.liinaLoppu[0] - ASETELMA.liina[0]) * r;
+    const z = ASETELMA.liina[1] + (KAUPPA.liinaLoppu[1] - ASETELMA.liina[1]) * r;
+    /* kulkusuunta reitillä: poispäin kameran ohi tai takaisin paikalle */
+    const suunta = Math.atan2(-(KAUPPA.liinaLoppu[0] - ASETELMA.liina[0]), -(KAUPPA.liinaLoppu[1] - ASETELMA.liina[1]));
+    const haluttu = liikkuu ? (tavoite === 1 ? suunta : suunta + Math.PI) : ASETELMA.liina[2];
+    let ero = haluttu - liinaKaanto;
+    ero = Math.atan2(Math.sin(ero), Math.cos(ero));
+    liinaKaanto += ero * Math.min(1, dt * (liikkuu ? 9 : 6));
     liina.group.scale.set(1, 1, 1);
-    liina.group.rotation.set(0, ASETELMA.liina[2], 0);
-    liina.group.position.set(ASETELMA.liina[0], Math.max(0, h) * 0.015, ASETELMA.liina[1]);
-    liina.legs[0].rotation.x = 0; liina.legs[0].rotation.z = 0.06;
-    liina.legs[1].rotation.x = 0; liina.legs[1].rotation.z = -0.06;
-    liina.arms[0].rotation.x = 0.06 * h; liina.arms[0].rotation.z = 0.14;
-    liina.arms[1].rotation.x = -0.06 * h; liina.arms[1].rotation.z = -0.14;
+    liina.group.rotation.set(0, liinaKaanto, 0);
+    if (liikkuu) {
+      /* hölkän tahti seuraa nopeutta: reitin keskellä nopein */
+      const nopeus = 6 * liinaT * (1 - liinaT) + 0.35;
+      liinaVaihe += dt * 11 * Math.min(1, nopeus);
+      const sw = Math.sin(liinaVaihe);
+      liina.group.position.set(x, Math.abs(Math.cos(liinaVaihe)) * 0.06, z);
+      liina.legs[0].rotation.x = sw * 0.85; liina.legs[0].rotation.z = 0;
+      liina.legs[1].rotation.x = -sw * 0.85; liina.legs[1].rotation.z = 0;
+      liina.arms[0].rotation.x = -sw * 0.75; liina.arms[0].rotation.z = 0.05;
+      liina.arms[1].rotation.x = sw * 0.75; liina.arms[1].rotation.z = -0.05;
+    } else {
+      const h = Math.sin(S.t * 1.8);
+      liina.group.position.set(x, Math.max(0, h) * 0.015, z);
+      liina.legs[0].rotation.x = 0; liina.legs[0].rotation.z = 0.06;
+      liina.legs[1].rotation.x = 0; liina.legs[1].rotation.z = -0.06;
+      liina.arms[0].rotation.x = 0.06 * h; liina.arms[0].rotation.z = 0.14;
+      liina.arms[1].rotation.x = -0.06 * h; liina.arms[1].rotation.z = -0.14;
+    }
   } else if (riding) {
     /* lievä aaltomainen mutkittelu kaistan sisällä, ei vaikuta kaistalogiikkaan */
     const w = Math.sin(S.t * 2.6);
@@ -1904,7 +1961,8 @@ function tick() {
           ui.overText.textContent = 'Tervis sai kiinni · ' + Math.round(S.dist) + '\u00a0m';
           /* valikko.js tallentaa tuloksen ja päättää, onko kyse ennätyksestä */
           document.dispatchEvent(new CustomEvent('liina:loppu', { detail: {
-            pisteet: Math.round(S.score), matka: Math.round(S.dist), kesto: +S.kesto.toFixed(2)
+            pisteet: Math.round(S.score), matka: Math.round(S.dist), kesto: +S.kesto.toFixed(2),
+            kolikot: S.coins, laudatKeratyt: S.laudatKeratyt, laudatKaytetyt: S.laudatKaytetyt
           } }));
         }
     }
@@ -1915,24 +1973,41 @@ function tick() {
   mascot.position.x = Math.sin(S.t * 0.5) * 0.6;
 
   /* camera */
+  if (!S.started) {
+    const askel = dt / KAUPPA.kameraKesto;
+    kauppaK = kauppaAuki ? Math.min(1, kauppaK + askel) : Math.max(0, kauppaK - askel);
+  }
+  const kk = pehmeasti(kauppaK);
+  const valiin = (a, b) => new THREE.Vector3(a[0] + (b[0] - a[0]) * kk, a[1] + (b[1] - a[1]) * kk, a[2] + (b[2] - a[2]) * kk);
   const camTarget = S.started
     ? new THREE.Vector3(S.laneX * 0.3, 4.2 + S.y * 0.25, 9.8)
-    : new THREE.Vector3(...ASETELMA.kamera);
-  camera.position.lerp(camTarget, Math.min(1, dt * 2.4));
-  const tavoiteFov = S.started ? 72 : ASETELMA.fov;
+    : valiin(ASETELMA.kamera, KAUPPA.kamera);
+  /* kaupan siirtymä on jo itsessään pehmeä, joten kamera seuraa sitä tiiviisti */
+  const kameraNopeus = !S.started && (kauppaAuki || kauppaK > 0) ? 6 : 2.4;
+  camera.position.lerp(camTarget, Math.min(1, dt * kameraNopeus));
+  const tavoiteFov = S.started ? 72 : ASETELMA.fov + (KAUPPA.fov - ASETELMA.fov) * kk;
   if (Math.abs(camera.fov - tavoiteFov) > 0.01) {
-    camera.fov += (tavoiteFov - camera.fov) * Math.min(1, dt * 2.4);
+    camera.fov += (tavoiteFov - camera.fov) * Math.min(1, dt * kameraNopeus);
     camera.updateProjectionMatrix();
   }
   const look = S.started
     ? new THREE.Vector3(S.laneX * 0.18, 1.4 + S.y * 0.45, -12)
-    : new THREE.Vector3(...ASETELMA.katse);
+    : valiin(ASETELMA.katse, KAUPPA.katse);
   if (S.shake > 0) {
     S.shake -= dt;
     look.x += (Math.random() - 0.5) * 0.6;
     look.y += (Math.random() - 0.5) * 0.4;
   }
   camera.lookAt(look);
+
+  /* Kauppa-nappi seuraa jahtaajan jalkoja etusivulla */
+  if (!S.started && ui.kauppa) {
+    camera.updateMatrixWorld();
+    jalat.set(tervis.group.position.x, 0, tervis.group.position.z - 0.3).project(camera);
+    const alue = renderer.domElement.getBoundingClientRect();
+    ui.kauppa.style.transform = `translate(${alue.left + (jalat.x + 1) / 2 * alue.width}px, ` +
+      `${alue.top + (1 - jalat.y) / 2 * alue.height}px) translate(-50%, 6px)`;
+  }
   sun.position.set(S.laneX + 9, 16, 8);
   sun.target.position.set(S.laneX, 0, -4);
   sun.target.updateMatrixWorld();

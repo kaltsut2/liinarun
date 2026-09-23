@@ -76,12 +76,25 @@ const VIESTIT = {
 const viesti = koodi => VIESTIT[koodi] || 'Jokin meni vikaan. Yritä uudelleen.';
 
 /* ---------- tila ---------- */
-export const pelaaja = { nimimerkki: null, paras: 0, sija: null };
+export const pelaaja = {
+  nimimerkki: null, paras: 0, sija: null,
+  kolikot: 0, potkulaudat: 0, jahtaaja: 'tervis'
+};
+
+/* Tilin tiedot tulevat palvelimelta usean funktion vastauksessa. Kentät,
+   joita vastauksessa ei ole, jätetään ennalleen. */
+export function asetaTili(tieto) {
+  if (tieto.kolikot != null) pelaaja.kolikot = tieto.kolikot;
+  if (tieto.potkulaudat != null) pelaaja.potkulaudat = tieto.potkulaudat;
+  if (tieto.jahtaaja) pelaaja.jahtaaja = tieto.jahtaaja;
+  document.dispatchEvent(new CustomEvent('liina:varasto', { detail: { potkulaudat: pelaaja.potkulaudat } }));
+}
 
 function asetaPelaaja(tieto) {
   pelaaja.nimimerkki = tieto.nimimerkki;
   pelaaja.paras = tieto.paras || 0;
   pelaaja.sija = tieto.sija ?? null;
+  asetaTili(tieto);
 }
 
 /* ---------- näkymä ---------- */
@@ -218,6 +231,7 @@ export async function kirjauduUlos() {
   muisti.poista();
   pinMuisti.poista();
   pelaaja.nimimerkki = null; pelaaja.paras = 0; pelaaja.sija = null;
+  asetaTili({ kolikot: 0, potkulaudat: 0, jahtaaja: 'tervis' });
   kentta.nimi.value = ''; kentta.pin.value = ''; kentta.pin2.value = '';
   document.body.classList.add('tunnistamaton');
   asetaTila('vanha');

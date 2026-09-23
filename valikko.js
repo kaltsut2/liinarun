@@ -10,7 +10,7 @@
    liina-scene.js ei käynnistä peliä välilyönnistä.
    --------------------------------------------------------------- */
 
-import { pelaaja, tunnus, omaPin, rpc, viesti, kirjauduUlos, SUPABASE_URL, SUPABASE_KEY } from './verkko.js';
+import { pelaaja, asetaTili, tunnus, omaPin, rpc, viesti, kirjauduUlos, SUPABASE_URL, SUPABASE_KEY } from './verkko.js';
 
 /* Realtime-yhteyteen tarvitaan Supabasen kirjasto. Se ladataan vasta kun
    tulostaulu avataan, joten peli käynnistyy yhtä nopeasti kuin ennenkin
@@ -34,6 +34,7 @@ export function paivitaKuka() {
   el('kukaParasOtsikko').hidden = !onParas;
   el('kukaParas').hidden = !onParas;
   el('kukaParas').textContent = onParas ? fi(pelaaja.paras) : '';
+  el('kukaKolikot').textContent = fi(pelaaja.kolikot);
 }
 document.addEventListener('liina:tunnistettu', paivitaKuka);
 paivitaKuka();
@@ -193,11 +194,20 @@ addEventListener('keydown', e => {
    Juoksun loppu: tallennus ja ennätysilmoitus
    --------------------------------------------------------------- */
 
+/* Lähettämättömät juoksut. Jokaisen juoksun kolikot ja potkulaudat
+   kuuluvat tilille, joten jonossa pidetään kaikki (enintään 30), ei vain
+   parasta. Vanhempi versio tallensi yhden tuloksen oliona. */
 const JONO_AVAIN = 'liinarun.jonossa';
+const JONO_MAX = 30;
 const jono = {
-  hae() { try { return JSON.parse(localStorage.getItem(JONO_AVAIN)); } catch { return null; } },
-  aseta(t) { try { localStorage.setItem(JONO_AVAIN, JSON.stringify(t)); } catch {} },
-  poista() { try { localStorage.removeItem(JONO_AVAIN); } catch {} }
+  hae() {
+    try {
+      const j = JSON.parse(localStorage.getItem(JONO_AVAIN));
+      return Array.isArray(j) ? j : j ? [j] : [];
+    } catch { return []; }
+  },
+  aseta(t) { try { t.length ? localStorage.setItem(JONO_AVAIN, JSON.stringify(t)) : localStorage.removeItem(JONO_AVAIN); } catch {} },
+  lisaa(tulos) { this.aseta([...this.hae(), tulos].slice(-JONO_MAX)); }
 };
 
 function naytaLoppu(tulos, ennatys) {
@@ -223,9 +233,28 @@ function tilaRivi(v) {
 }
 
 async function tallenna(tulos) {
-  return rpc('tallenna_tulos', {
-    p_tunnus: tunnus(), p_pisteet: tulos.pisteet, p_matka: tulos.matka, p_kesto: tulos.kesto
+  const v = await rpc('tallenna_tulos', {
+    p_tunnus: tunnus(), p_pisteet: tulos.pisteet, p_matka: tulos.matka, p_kesto: tulos.kesto,
+    p_kolikot: tulos.kolikot || 0,
+    p_laudat_keratyt: tulos.laudatKeratyt || 0,
+    p_laudat_kaytetyt: tulos.laudatKaytetyt || 0
   });
+  pelaaja.paras = v.paras;
+  pelaaja.sija = v.sija;
+  asetaTili(v);
+  paivitaKuka();
+  return v;
+}
+
+/* Juoksun vaikutus tiliin heti, ennen palvelimen vastausta: seuraava
+   juoksu alkaa oikeilla laudoilla, vaikka yhteys olisi poikki. */
+function kirjaaPaikallisesti(tulos) {
+  asetaTili({
+    kolikot: pelaaja.kolikot + (tulos.kolikot || 0),
+    potkulaudat: Math.min(5, Math.max(0,
+      pelaaja.potkulaudat + (tulos.laudatKeratyt || 0) - (tulos.laudatKaytetyt || 0)))
+  });
+  paivitaKuka();
 }
 
 let loppuNro = 0;
@@ -240,13 +269,21 @@ document.addEventListener('liina:loppu', async e => {
      laite on ehtinyt parantaa ennätystä sillä välin. */
   const arvio = tulos.pisteet > pelaaja.paras;
   naytaLoppu(tulos, arvio);
+  el('overKolikot').textContent = tulos.kolikot > 0 ? `+${fi(tulos.kolikot)} kolikkoa tilille` : '';
   el('overTila').textContent = 'Tallennetaan tulosta…';
+  kirjaaPaikallisesti(tulos);
 
   try {
+    /* jonossa olevat ensin, jotta tilin luvut kulkevat oikeassa järjestyksessä */
+    if (jono.hae().length) {
+      jono.lisaa(tulos);
+      await puraJono();
+      if (nro === loppuNro) el('overTila').textContent = jono.hae().length
+        ? 'Ei yhteyttä. Tulos tallennetaan, kun yhteys palaa.'
+        : tilaRivi({ uusi_ennatys: false, paras: pelaaja.paras, sija: pelaaja.sija });
+      return;
+    }
     const v = await tallenna(tulos);
-    pelaaja.paras = v.paras;
-    pelaaja.sija = v.sija;
-    paivitaKuka();
     if (nro !== loppuNro) return;
     if (v.uusi_ennatys !== arvio) naytaLoppu(tulos, v.uusi_ennatys);
     el('overTila').textContent = tilaRivi(v);
@@ -254,8 +291,7 @@ document.addEventListener('liina:loppu', async e => {
     if (err.koodi === 'EI_YHTEYTTA') {
       /* Tulos jää laitteelle ja lähetetään, kun peli seuraavan kerran
          saa yhteyden. Jonossa pidetään vain paras lähettämätön tulos. */
-      const vanha = jono.hae();
-      if (!vanha || tulos.pisteet > vanha.pisteet) jono.aseta(tulos);
+      jono.lisaa(tulos);
       if (arvio) { pelaaja.paras = tulos.pisteet; paivitaKuka(); }
       if (nro === loppuNro) el('overTila').textContent = 'Ei yhteyttä. Tulos tallennetaan, kun yhteys palaa.';
     } else if (nro === loppuNro) {
@@ -266,22 +302,32 @@ document.addEventListener('liina:loppu', async e => {
   }
 });
 
-/* Lähettämätön tulos yritetään uudelleen, kun laite on tunnistettu. */
-document.addEventListener('liina:tunnistettu', async () => {
-  const odottava = jono.hae();
-  if (!odottava) return;
+/* Lähettämättömät juoksut lähetetään vanhimmasta alkaen. Palvelin
+   hyväksyy tallennuksen enintään 1,5 sekunnin välein, joten väliin
+   odotetaan hetki. Hylätty juoksu ei parane uudella yrityksellä ja
+   poistetaan; verkkovirheessä loput jäävät odottamaan seuraavaa kertaa. */
+let purkamassa = false;
+async function puraJono() {
+  if (purkamassa) return;
+  purkamassa = true;
   try {
-    const v = await tallenna(odottava);
-    jono.poista();
-    pelaaja.paras = v.paras;
-    pelaaja.sija = v.sija;
-    paivitaKuka();
-  } catch (err) {
-    /* Hylätty tulos ei parane uudella yrityksellä, joten se poistetaan.
-       Verkkovirheessä se jää odottamaan seuraavaa kertaa. */
-    if (err.koodi !== 'EI_YHTEYTTA') jono.poista();
+    let odottavat = jono.hae();
+    while (odottavat.length) {
+      const [seuraava, ...loput] = odottavat;
+      try {
+        await tallenna(seuraava);
+      } catch (err) {
+        if (err.koodi === 'EI_YHTEYTTA') break;
+      }
+      jono.aseta(loput);
+      odottavat = loput;
+      if (odottavat.length) await new Promise(r => setTimeout(r, 1700));
+    }
+  } finally {
+    purkamassa = false;
   }
-});
+}
+document.addEventListener('liina:tunnistettu', puraJono);
 
 /* ---------------------------------------------------------------
    Asetukset: nimimerkki, ennätys ja uloskirjautuminen
@@ -351,6 +397,54 @@ addEventListener('keydown', e => {
   if (!todiste.classList.contains('pois')) suljeTodiste();
   else if (document.body.classList.contains('asetukset-auki')) suljeAsetukset();
   else if (document.body.classList.contains('ohjeet-auki')) suljeOhjeet();
+});
+
+/* ---------------------------------------------------------------
+   Kauppa: etusivun Kauppa-napista. liina-scene.js hoitaa kameran ja
+   Liinan siirtymän; tässä vaihdetaan näkymät ja haetaan tilin tiedot.
+   Etusivu palaa näkyviin vasta, kun kamera on ehtinyt melkein takaisin.
+   --------------------------------------------------------------- */
+
+const kauppa = el('kauppa');
+let kauppaAjastin = null;
+
+function piirraKauppa() {
+  el('kauppaKolikot').textContent = fi(pelaaja.kolikot);
+}
+
+async function avaaKauppa() {
+  if (document.body.classList.contains('kauppa-auki')) return;
+  clearTimeout(kauppaAjastin);
+  document.body.classList.add('kauppa-auki');
+  intro.style.opacity = '0';
+  intro.classList.add('pois');
+  document.dispatchEvent(new CustomEvent('liina:kauppa', { detail: { auki: true } }));
+  piirraKauppa();
+  /* otsikko ja napit tulevat esiin, kun kamera on kääntynyt jahtaajaan */
+  kauppaAjastin = setTimeout(() => { kauppa.classList.remove('pois'); kauppa.style.opacity = '1'; }, 900);
+  try {
+    asetaTili(await rpc('kauppa', { p_tunnus: tunnus() }));
+    piirraKauppa(); paivitaKuka();
+  } catch {}
+}
+
+function suljeKauppa() {
+  if (!document.body.classList.contains('kauppa-auki')) return;
+  clearTimeout(kauppaAjastin);
+  kauppa.style.opacity = '0';
+  kauppa.classList.add('pois');
+  document.dispatchEvent(new CustomEvent('liina:kauppa', { detail: { auki: false } }));
+  kauppaAjastin = setTimeout(() => {
+    intro.style.opacity = '1';
+    intro.classList.remove('pois');
+    document.body.classList.remove('kauppa-auki');
+  }, 1300);
+}
+
+el('avaaKauppa').addEventListener('click', e => { e.currentTarget.blur(); avaaKauppa(); });
+el('suljeKauppa').addEventListener('click', e => { e.currentTarget.blur(); suljeKauppa(); });
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.body.classList.contains('kauppa-auki')) suljeKauppa();
 });
 
 /* ---------------------------------------------------------------
