@@ -74,6 +74,20 @@
   #botrow{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:5px;font:800 10px/1 Nunito,sans-serif;text-shadow:0 1px 3px rgba(0,0,0,.6)}
   #track{height:11px;border-radius:7px;background:rgba(14,20,32,.5);box-shadow:inset 0 0 0 2px rgba(255,255,255,.2);overflow:hidden}
   #bar{height:100%;width:0;border-radius:7px;background:linear-gradient(90deg,#ff9433,#ffd60a);transition:width .2s linear}
+  #bot.kulta #bar{background:linear-gradient(90deg,#ffd60a,#fff3a8,#ffd60a)}
+  #etappiNimi{max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* etapin ohitus: iso ilmoitus ruudun yläosaan hetkeksi */
+  #etappiIlmoitus{
+    position:absolute;left:50%;top:calc(96px + env(safe-area-inset-top));
+    transform:translate(-50%,-8px) scale(.9);opacity:0;pointer-events:none;
+    padding:10px 20px;border-radius:18px;text-align:center;white-space:nowrap;
+    background:#ffd60a;color:#12305e;box-shadow:0 5px 0 #b97f00,0 12px 26px rgba(9,18,38,.35);
+    font:800 22px/1.05 'Baloo 2',Nunito,sans-serif;
+    transition:opacity .25s ease,transform .25s ease;
+  }
+  #etappiIlmoitus small{display:block;font:800 12px/1.3 Nunito,sans-serif;letter-spacing:.04em}
+  #etappiIlmoitus.nakyy{opacity:1;transform:translate(-50%,0) scale(1)}
+  #etappiIlmoitus.oma{background:#fff;box-shadow:0 5px 0 #9aa6b2,0 12px 26px rgba(9,18,38,.35)}
 
   .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;background:linear-gradient(180deg,rgba(9,18,38,.12),rgba(9,18,38,.58));transition:opacity .35s;color:#fff;padding:0 22px;box-sizing:border-box;pointer-events:none}
   .kicker{font:800 11px/1 Nunito,sans-serif;color:#ffd60a;letter-spacing:.32em}
@@ -150,6 +164,10 @@
   #nimiLomake[hidden],#nimiOdota[hidden]{display:none}
   #nimiLomake label{display:flex;flex-direction:column;gap:5px;width:100%}
   #nimiLomake label[hidden]{display:none}
+  /* ohje nimimerkkikentän alla; virheen sattuessa punainen */
+  .kentta-ohje{font:600 11px/1.4 Nunito,sans-serif;color:rgba(255,255,255,.7);text-align:left;padding:0 4px}
+  .kentta-ohje.virhe{color:#ff6b57;font-weight:800}
+  .kentta.virhe{box-shadow:inset 0 0 0 2px #ff6b57}
   #nimiLomake label span{font:800 9px/1 Nunito,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.72);text-align:left;padding-left:4px}
   .kentta{
     -webkit-appearance:none;appearance:none;box-sizing:border-box;width:100%;
@@ -335,6 +353,13 @@
       inset 0 0 0 1px rgba(255,255,255,.38),0 6px 18px rgba(9,18,38,.28);
     will-change:transform;
   }
+  /* valitun jahtaajan nimi hänen päänsä yläpuolella etusivulla */
+  .jahtaaja-nimi{
+    position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none;
+    font:800 20px/1 'Baloo 2',Nunito,sans-serif;letter-spacing:.02em;color:#fff;
+    text-shadow:0 2px 0 rgba(9,18,38,.55),0 0 10px rgba(9,18,38,.45);
+    will-change:transform;
+  }
   .kauppa-nappi svg{filter:drop-shadow(0 1px 1px rgba(9,18,38,.4))}
   .kauppa-nappi:active{filter:brightness(1.12)}
   .kauppa-nappi:focus-visible{outline:3px solid #ffd60a;outline-offset:3px}
@@ -352,6 +377,31 @@
   .kauppa-saldo{padding:7px 16px;gap:8px}
   .kauppa-saldo .kolikko-ikoni{width:18px;height:18px}
   .kauppa-saldo b{font-size:20px}
+  /* Kauppa ottaa kosketuksen vastaan koko ruudulta, jotta rinkiä voi
+     pyörittää pyyhkäisemällä mistä kohtaa tahansa. */
+  #kauppa{pointer-events:auto;touch-action:pan-y}
+  #kauppa.pois{pointer-events:none}
+  .kauppa-ohjaus{display:flex;align-items:center;gap:14px}
+  .kauppa-ohjaus .btn{margin-top:0}
+  .kauppa-ohjaus .nuolinappi{width:58px;height:54px;border-radius:16px}
+  .kauppa-nimet{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .rinki-nimi{
+    position:absolute;left:0;top:0;white-space:nowrap;transform-origin:50% 100%;
+    padding:5px 12px;border-radius:999px;
+    font:800 17px/1 'Baloo 2',Nunito,sans-serif;color:#fff;letter-spacing:.02em;
+    background:rgba(14,20,32,.5);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.2);
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+    will-change:transform,opacity;
+  }
+  .kauppa-toiminto{min-width:220px;display:flex;align-items:center;justify-content:center;gap:8px}
+  .kauppa-toiminto .kolikko-ikoni{width:18px;height:18px}
+  .kauppa-toiminto:disabled{cursor:default}
+  .kauppa-toiminto.harmaa{background:rgba(14,20,32,.55);color:rgba(255,255,255,.85);box-shadow:inset 0 0 0 2px rgba(255,255,255,.22)}
+  .kauppa-toiminto.himmea{opacity:.6}
+  .kauppa-toiminto.vahvista{background:linear-gradient(180deg,#ef6317,#c74a0d);color:#fff;box-shadow:0 5px 0 #8a3208,inset 0 2px 0 rgba(255,255,255,.35)}
+  .kauppa-huomio{min-height:18px;text-shadow:0 1px 3px rgba(9,18,38,.8)}
+  .rinki-nimi.valittu{background:#ffd60a;color:#12305e;box-shadow:0 4px 0 #b97f00}
+  .rinki-nimi.tyhja{font-style:italic}
 
   /* Ohjeet-leima etusivun oikeassa laidassa otsikon ja Liinan välissä,
      kuin kauppojen alennustarra: sakarareunainen, vino ja keltainen. */
@@ -525,17 +575,18 @@
 <div id="game">
   <div id="stage"></div>
   <div class="hud" id="tl">
-    <div class="pill"><b id="score">0</b><span>PISTETTÄ</span></div>
+    <div class="pill"><b id="score">0</b><span>M</span></div>
     <div class="pill"><i class="coin"></i><b id="coins" style="font-size:14px">0</b></div>
   </div>
   <div class="hud" id="tr">
-    <div class="pill" style="padding:5px 10px;gap:7px"><span style="letter-spacing:.06em">TERVIS</span><b id="gap" style="font-size:13px">2 s</b></div>
+    <div class="pill" style="padding:5px 10px;gap:7px"><span style="letter-spacing:.06em" id="gapNimi">TERVIS</span><b id="gap" style="font-size:13px">2 s</b></div>
     <div id="boost" style="padding:4px 10px;border-radius:12px;background:#ffd60a;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18);font:900 11px/1 Nunito,sans-serif;color:#12305e">x1</div>
   </div>
   <div class="hud" id="bot">
-    <div id="botrow"><span>MUSEO</span><span id="meters">900 m → MASCOT</span></div>
+    <div id="botrow"><span id="etappiNimi">OMA ENNÄTYS</span><span id="meters">0 m</span></div>
     <div id="track"><div id="bar"></div></div>
   </div>
+  <div class="hud" id="etappiIlmoitus" aria-live="polite"></div>
   <button class="hud tyhja" id="scoot" aria-label="Aktivoi potkulauta">
     <svg id="scootKello" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="45"/></svg>
     <svg id="scootIkoni" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -561,6 +612,7 @@
       </svg>
       <span class="leima-teksti"><small>PELIN</small>OHJEET</span>
     </button>
+    <div class="jahtaaja-nimi" id="jahtaajaNimi" aria-hidden="true">Tervis</div>
     <button class="kauppa-nappi" id="avaaKauppa" type="button">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/>
@@ -598,7 +650,8 @@
       <label><span>NIMIMERKKI</span>
         <input class="kentta" id="nimiKentta" name="username" type="text" maxlength="16" required
                autocomplete="username" autocapitalize="words" autocorrect="off" spellcheck="false"
-               placeholder="esim. Liina">
+               placeholder="esim. Liina" aria-describedby="nimiKenttaOhje">
+        <small class="kentta-ohje" id="nimiKenttaOhje" aria-live="polite"></small>
       </label>
       <label><span>PIN · 4 NUMEROA</span>
         <input class="kentta pin" id="pinKentta" name="password" type="password" inputmode="numeric"
@@ -655,8 +708,19 @@
       <div class="title">KAUPPA</div>
       <div class="pill kauppa-saldo" aria-label="Kolikot"><i class="kolikko-ikoni" aria-hidden="true"></i><b id="kauppaKolikot">0</b></div>
     </div>
+    <div class="kauppa-nimet" id="kauppaNimet" aria-live="polite"></div>
     <div class="kauppa-ala">
-      <button class="btn" id="suljeKauppa" type="button">TAKAISIN</button>
+      <button class="btn kauppa-toiminto" id="kauppaToiminto" type="button" disabled>…</button>
+      <div class="hint kauppa-huomio" id="kauppaHuomio"></div>
+      <div class="kauppa-ohjaus">
+        <button class="nuolinappi" id="kauppaEdellinen" type="button" aria-label="Edellinen jahtaaja">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <button class="btn" id="suljeKauppa" type="button">TAKAISIN</button>
+        <button class="nuolinappi" id="kauppaSeuraava" type="button" aria-label="Seuraava jahtaaja">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
     </div>
   </div>
   <div class="screen pois" id="ohjeet" style="opacity:0">
@@ -682,7 +746,7 @@
               <svg class="ohje-salama oikea" viewBox="0 0 30 46"><path d="M18 0L2 26h12L8 46 28 18H16l6-18z" fill="#f2600c"/></svg>
             </div>
             <h3>NOCCO-TÖLKKI</h3>
-            <p>Nappaa tölkki, niin saat neljän sekunnin boostin: juokset puolitoista kertaa nopeammin, ja jokainen kolikko on tuplasti arvokas. Tölkki antaa myös 150 pistettä.</p>
+            <p>Nappaa tölkki, niin saat neljän sekunnin boostin: juokset puolitoista kertaa nopeammin, joten metrejä kertyy nopeammin, ja jokainen kolikko on tuplasti arvokas.</p>
           </div></section>
           <section class="ohjesivu ohje-ryde" aria-label="Ohje 3/5: Ryde-potkulauta"><div class="ohjesivu-sisa">
             <div class="ohje-kuva ohje-3d" id="ohjeRydeKuva" aria-hidden="true">
@@ -763,7 +827,7 @@
       <div class="kicker" id="overKicker">JÄÄT JÄLKEEN</div>
       <div class="title" id="overOtsikko">TERVIS<br>SAI KIINNI</div>
       <div class="hint" id="overText"></div>
-      <div class="pill" id="overPisteet"><b id="overLuku">0</b><span>PISTETTÄ</span></div>
+      <div class="pill" id="overPisteet"><b id="overLuku">0</b><span>METRIÄ</span></div>
       <div class="over-kolikot" id="overKolikot"></div>
       <div class="hint" id="overTila"></div>
       <div class="valikkonapit">

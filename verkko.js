@@ -66,12 +66,18 @@ async function rpc(funktio, parametrit) {
 const VIESTIT = {
   NIMI_VARATTU: 'Nimimerkki on jo käytössä. Valitse toinen.',
   NIMI_MUOTO: 'Nimimerkissä pitää olla 3–16 merkkiä: kirjaimia, numeroita, välilyöntejä tai merkit _ . -',
-  NIMI_KIELLETTY: 'Tätä nimimerkkiä ei voi käyttää. Valitse toinen.',
+  NIMI_KIELLETTY: 'Nimimerkki on asiaton. Valitse toinen.',
+  NIMI_LYHYT: 'Nimimerkki on liian lyhyt: vähintään 3 merkkiä.',
+  NIMI_MERKIT: 'Sallittuja ovat kirjaimet, numerot, välilyönti ja merkit _ . -',
   PIN_MUOTO: 'PIN-koodissa pitää olla neljä numeroa.',
   PIN_ERI: 'PIN-koodit eivät täsmää. Kirjoita sama koodi kahdesti.',
   VIRHEELLINEN_TUNNUS: 'Nimimerkki tai PIN on väärin.',
   KIRJAUTUMINEN_LUKITTU: 'Liian monta väärää yritystä. Odota 15 minuuttia ja yritä uudelleen.',
-  EI_YHTEYTTA: 'Ei yhteyttä palvelimeen. Tarkista verkko ja yritä uudelleen.'
+  EI_YHTEYTTA: 'Ei yhteyttä palvelimeen. Tarkista verkko ja yritä uudelleen.',
+  EI_KOLIKOITA: 'Kolikot eivät riitä.',
+  EI_SAATAVILLA: 'Tätä jahtaajaa ei voi vielä ostaa.',
+  JO_OMISTETTU: 'Omistat jo tämän jahtaajan.',
+  EI_OMISTETTU: 'Osta jahtaaja ensin.'
 };
 const viesti = koodi => VIESTIT[koodi] || 'Jokin meni vikaan. Yritä uudelleen.';
 
@@ -87,7 +93,9 @@ export function asetaTili(tieto) {
   if (tieto.kolikot != null) pelaaja.kolikot = tieto.kolikot;
   if (tieto.potkulaudat != null) pelaaja.potkulaudat = tieto.potkulaudat;
   if (tieto.jahtaaja) pelaaja.jahtaaja = tieto.jahtaaja;
-  document.dispatchEvent(new CustomEvent('liina:varasto', { detail: { potkulaudat: pelaaja.potkulaudat } }));
+  document.dispatchEvent(new CustomEvent('liina:varasto', {
+    detail: { potkulaudat: pelaaja.potkulaudat, jahtaaja: pelaaja.jahtaaja }
+  }));
 }
 
 function asetaPelaaja(tieto) {
@@ -113,6 +121,32 @@ function naytaVirhe(koodi) {
   virhe.hidden = !koodi;
 }
 
+/* Nimimerkin ohje ja virheet näkyvät kentän alla. Sama sääntö kuin
+   palvelimella: 3–16 merkkiä, vähintään yksi kirjain tai numero.
+   Asiattomat sanat tarkistaa vain palvelin, koska lista on siellä. */
+const NIMI_OHJE = '3–16 merkkiä: kirjaimia, numeroita, välilyöntejä tai merkit _ . -';
+const nimiOhje = el('nimiKenttaOhje');
+function naytaNimiVirhe(koodi) {
+  nimiOhje.textContent = koodi ? viesti(koodi) : NIMI_OHJE;
+  nimiOhje.classList.toggle('virhe', !!koodi);
+  kentta.nimi.classList.toggle('virhe', !!koodi);
+}
+function nimenVirhe(arvo) {
+  const n = arvo.trim().replace(/\s+/g, ' ');
+  if (!n) return null;
+  if (!/^[A-Za-zÅÄÖåäöÉéÜü0-9_. -]*$/.test(n) || !/[A-Za-zÅÄÖåäöÉéÜü0-9]/.test(n)) return 'NIMI_MERKIT';
+  if (n.length < 3) return 'NIMI_LYHYT';
+  return null;
+}
+naytaNimiVirhe(null);
+/* kirjoittaessa virhe poistuu heti kun nimi kelpaa; kielletyt merkit
+   näytetään heti, liian lyhyt vasta kun kentästä poistutaan */
+kentta.nimi.addEventListener('input', () => {
+  const v = nimenVirhe(kentta.nimi.value);
+  if (nimiOhje.classList.contains('virhe') || v === 'NIMI_MERKIT') naytaNimiVirhe(v);
+});
+kentta.nimi.addEventListener('blur', () => naytaNimiVirhe(nimenVirhe(kentta.nimi.value)));
+
 function asetaTila(uusi) {
   tila = uusi;
   const onUusi = tila === 'uusi';
@@ -126,6 +160,7 @@ function asetaTila(uusi) {
   laheta.textContent = onUusi ? 'VARAA NIMIMERKKI' : 'KIRJAUDU';
   vaihda.textContent = onUusi ? 'Minulla on jo nimimerkki' : 'Olen uusi pelaaja';
   naytaVirhe(null);
+  naytaNimiVirhe(null);
 }
 
 function naytaLomake() {
@@ -185,6 +220,8 @@ lomake.addEventListener('submit', async e => {
   e.preventDefault();
   const nimi = kentta.nimi.value.trim();
   const pin = kentta.pin.value;
+  const nimiVika = nimi ? nimenVirhe(nimi) : 'NIMI_LYHYT';
+  if (nimiVika) { naytaNimiVirhe(nimiVika); kentta.nimi.focus(); return; }
   if (!/^[0-9]{4}$/.test(pin)) { naytaVirhe('PIN_MUOTO'); kentta.pin.focus(); return; }
   if (tila === 'uusi' && pin !== kentta.pin2.value) { naytaVirhe('PIN_ERI'); kentta.pin2.focus(); return; }
 
@@ -200,8 +237,9 @@ lomake.addEventListener('submit', async e => {
     document.activeElement && document.activeElement.blur();
     paastaPeliin();
   } catch (err) {
-    naytaVirhe(err.koodi);
-    (err.koodi && err.koodi.startsWith('NIMI') ? kentta.nimi : kentta.pin).focus();
+    /* nimimerkin virheet kentän alle, muut lomakkeen virhelaatikkoon */
+    if (err.koodi && err.koodi.startsWith('NIMI')) { naytaNimiVirhe(err.koodi); kentta.nimi.focus(); }
+    else { naytaVirhe(err.koodi); kentta.pin.focus(); }
   } finally {
     laheta.disabled = false;
   }

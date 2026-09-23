@@ -807,6 +807,123 @@ tervis.group.scale.setScalar(1.06);
 tervis.group.position.set(0, 0, 12.5);
 world.add(tervis.group);
 
+/* ---------- kaupan jahtaajat ----------
+   Tervis on valmis; muut ovat paikkamerkkejä samasta palikkahahmosta
+   omilla väreillään, kunnes oikeat 3D-mallit tulevat. Neljäs paikka on
+   tyhjä: läpikuultava hahmo ja kysymysmerkki. Tunnisteet ovat samat kuin
+   palvelimen jahtaajat-taulussa. */
+function paikkamerkki(o) {
+  const h = makeRunner({
+    top: toon(o.paita), pants: toon(o.housut), sleeve: toon(o.paita), shoe: toon(o.kengat || 0x3a3230),
+    hair: toon(o.hiukset), longHair: !!o.pitkat, kasvot: 'tervis'
+  });
+  if (o.kruunu) {
+    /* Queen Marin kruunu: kultainen rengas ja piikit päälaella */
+    const kulta = toon(0xffd60a, { emissive: 0x5a3c00, emissiveIntensity: 0.4 });
+    const kruunu = new THREE.Group();
+    kruunu.add(new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.28, 0.12, 20, 1, true), kulta));
+    for (let i = 0; i < 5; i++) {
+      const piikki = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 8), kulta);
+      const a = i / 5 * Math.PI * 2;
+      piikki.position.set(Math.sin(a) * 0.25, 0.13, Math.cos(a) * 0.25);
+      kruunu.add(piikki);
+    }
+    kruunu.position.y = 2.78;
+    kruunu.rotation.x = -0.12;
+    h.group.add(kruunu);
+  }
+  h.group.visible = false;
+  world.add(h.group);
+  return h;
+}
+
+function tyhjaHahmo() {
+  const lasi = new THREE.MeshBasicMaterial({ color: 0xc9d4de, transparent: true, opacity: 0.32, depthWrite: false });
+  const h = makeRunner({ top: lasi, pants: lasi, sleeve: lasi, shoe: lasi, hair: lasi });
+  h.group.traverse(m => { if (m.isMesh) { m.material = lasi; m.castShadow = false; } });
+  const kysymys = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.62),
+    new THREE.MeshBasicMaterial({ map: canvasTex(128, 128, (g, w, hh) => {
+      g.clearRect(0, 0, w, hh);
+      g.fillStyle = '#ffffff';
+      g.font = "800 112px 'Baloo 2', Nunito, sans-serif";
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('?', w / 2, hh / 2 + 8);
+    }), transparent: true, depthWrite: false }));
+  kysymys.position.set(0, 2.3, -0.45);
+  kysymys.rotation.y = Math.PI;
+  h.group.add(kysymys);
+  h.group.visible = false;
+  world.add(h.group);
+  return h;
+}
+
+const JAHTAAJAT = [
+  { id: 'tervis', nimi: 'Tervis', hahmo: tervis },
+  { id: 'queen_mari', nimi: 'Queen Mari',
+    hahmo: paikkamerkki({ paita: 0x8a5cc2, housut: 0x4b3170, hiukset: 0xe6cf86, pitkat: true, kruunu: true }) },
+  { id: 'sarra', nimi: 'Sarra',
+    hahmo: paikkamerkki({ paita: 0x2f9e8f, housut: 0x24444a, hiukset: 0x3b2a20, pitkat: true }) },
+  { id: 'tyhja', nimi: 'Tulossa', hahmo: tyhjaHahmo(), tyhja: true },
+  { id: 'nina', nimi: 'Nina',
+    hahmo: paikkamerkki({ paita: 0xe0b33a, housut: 0x3d4a66, hiukset: 0x7a4a2a }) }
+];
+/* Oikeat 3D-mallit korvaavat paikkamerkit. Malleissa on samat nivelet
+   kuin makeRunnerissa (jalka_vasen/oikea lonkassa, kasi_vasen/oikea
+   olkapäässä), joten sama animaatio toimii niissä. Malli ladataan vasta,
+   kun kauppa avataan tai jahtaaja on valittu; siihen asti paikkamerkki. */
+/* levitys: käsien kulma ulospäin (rad), jotta kädet ja kantamukset
+   eivät mene leveän vaatteen läpi. Sarran mekon hame on keskeltä
+   0,4–0,44 m leveä, joten hänen kätensä ovat selvästi sivuilla. */
+const JAHTAAJA_MALLIT = {
+  queen_mari: { url: '3dmallit/queen_mari_pakattu.glb', levitys: 0.08 },
+  sarra: { url: '3dmallit/sarra_pakattu.glb', levitys: 0.32 }
+};
+const ladatutMallit = {};
+function lataaJahtaajaMalli(id) {
+  if (ladatutMallit[id] || !JAHTAAJA_MALLIT[id]) return;
+  ladatutMallit[id] = (async () => {
+    const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+    const juuri = (await new GLTFLoader().loadAsync(JAHTAAJA_MALLIT[id].url)).scene;
+    /* materiaalit pelin toon-varjostukseen, värit ja kuviot säilyvät */
+    const aineet = new Map();
+    juuri.traverse(o => {
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      const v = o.material;
+      /* säilytetään myös kaksipuolisuus ja läpinäkyvyys: esim. Sarran lipun
+         kangas on ohut taso, joka muuten näkyisi vain toiselta puolelta */
+      if (!aineet.has(v)) aineet.set(v, toon(v.color ? v.color.getHex() : 0xffffff, {
+        ...(v.map ? { map: v.map } : {}),
+        side: v.side, transparent: v.transparent, opacity: v.opacity, alphaTest: v.alphaTest
+      }));
+      o.material = aineet.get(v);
+    });
+    const osa = nimi => juuri.getObjectByName(nimi);
+    /* järjestys kuten makeRunnerissa: indeksi 0 on -x-puoli eli hahmon oikea */
+    const hahmo = {
+      group: new THREE.Group(),
+      legs: [osa('jalka_oikea'), osa('jalka_vasen')],
+      arms: [osa('kasi_oikea'), osa('kasi_vasen')],
+      korkeus: new THREE.Box3().setFromObject(juuri).max.y,
+      levitys: JAHTAAJA_MALLIT[id].levitys
+    };
+    hahmo.group.add(juuri);
+    const j = JAHTAAJAT.find(x => x.id === id);
+    const vanha = j.hahmo.group;
+    hahmo.group.position.copy(vanha.position);
+    hahmo.group.rotation.copy(vanha.rotation);
+    hahmo.group.scale.copy(vanha.scale);
+    hahmo.group.visible = vanha.visible;
+    world.remove(vanha);
+    world.add(hahmo.group);
+    j.hahmo = hahmo;
+  })().catch(e => { console.warn('Jahtaajan malli ei latautunut:', id, e); ladatutMallit[id] = null; });
+}
+
+/* Pelaajan valitsema jahtaaja: seisoo etusivulla ja jahtaa juoksussa. */
+let valittuI = 0;
+const valittu = () => JAHTAAJAT[valittuI].hahmo;
+
 /* ---------- cars ---------- */
 function carShape(pts) {
   const sh = new THREE.Shape();
@@ -1020,7 +1137,7 @@ const canTex = canvasTex(1024, 512, (g, w, h) => {
     g.fillText('FOCUS', ox + w / 4, 218);
     g.fillStyle = '#ffffff';
     g.font = '800 40px Nunito, sans-serif';
-    g.fillText('KOFFEIINI 180 mg', ox + w / 4, 478);
+    g.fillText('KOFEIINI 180 mg', ox + w / 4, 478);
   }
 });
 function makeCan() {
@@ -1374,16 +1491,57 @@ camera.updateProjectionMatrix();
    Suljettaessa sama takaperin: Liina palaa paikalleen ja kääntyy.
    kauppaK on kameran siirtymä ja liinaT Liinan reitti, kumpikin 0–1. */
 const KAUPPA = {
-  kamera: [1.55, 2.55, -3.7],
-  katse: [1.9, 1.4, 2.1],
-  fov: 62,
+  kamera: [1.9, 4.1, -4.9],
+  katse: [1.9, 1.05, 3.5],
+  fov: 64,
   kameraKesto: 1.7,               /* s */
   liinaLoppu: [-3.4, -7.8],       /* [x, z] kameran takana oikealla */
   liinaKesto: 2.1                 /* s, noin 3,6 m/s eli rauhallinen hölkkä */
 };
 let kauppaAuki = false, kauppaK = 0, liinaT = 0, liinaKaanto = ASETELMA.liina[2], liinaVaihe = 0;
+
+/* Jahtaajarinki museon edessä. Etupaikka on Terviksen etusivun paikalla,
+   joten kaupan auetessa hän on valmiiksi oikeassa kohdassa ja muut
+   nousevat esiin hänen taakseen. rinkiValinta kasvaa ja pienenee
+   rajatta; etupaikalla on JAHTAAJAT[rinkiValinta mod 5]. Kun valinta
+   kasvaa, kaikki kiertävät myötäpäivään ylhäältä katsottuna, jolloin
+   etupaikalla oleva siirtyy ruudulla vasemmalle ja oikealta tulee uusi. */
+const RINKI = { sade: 1.9, askel: Math.PI * 2 / 5 };
+RINKI.keski = [ASETELMA.tervis[0], ASETELMA.tervis[1] + RINKI.sade];
+let rinkiValinta = 0, rinkiKulma = 0, rinkiVaihe = 0;
+const mod5 = n => ((n % 5) + 5) % 5;
+document.addEventListener('liina:rinki-siirto', e => {
+  if (!kauppaAuki) return;
+  rinkiValinta += e.detail.suunta > 0 ? 1 : -1;
+  document.dispatchEvent(new CustomEvent('liina:rinki-kohdalla', { detail: { id: JAHTAAJAT[mod5(rinkiValinta)].id } }));
+});
+/* etupaikan korostus: keltainen hehkuva rengas maassa */
+const rinkiKorostus = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.78, 40),
+  new THREE.MeshBasicMaterial({ color: 0xffd60a, transparent: true, opacity: 0, depthWrite: false }));
+rinkiKorostus.rotation.x = -Math.PI / 2;
+rinkiKorostus.position.set(ASETELMA.tervis[0], 0.03, ASETELMA.tervis[1]);
+world.add(rinkiKorostus);
+const rinkiNimet = JAHTAAJAT.map(j => {
+  const d = document.createElement('div');
+  d.className = 'rinki-nimi' + (j.tyhja ? ' tyhja' : '');
+  d.textContent = j.nimi;
+  document.getElementById('kauppaNimet')?.append(d);
+  return d;
+});
+const nimiPiste = new THREE.Vector3();
 const pehmeasti = t => t * t * (3 - 2 * t);
-document.addEventListener('liina:kauppa', e => { if (!S.started) kauppaAuki = !!e.detail.auki; });
+document.addEventListener('liina:kauppa', e => {
+  if (S.started) return;
+  kauppaAuki = !!e.detail.auki;
+  if (kauppaAuki) {
+    for (const j of JAHTAAJAT) lataaJahtaajaMalli(j.id);
+    document.dispatchEvent(new CustomEvent('liina:rinki-kohdalla', { detail: { id: JAHTAAJAT[mod5(rinkiValinta)].id } }));
+  } else {
+    /* suljettaessa rinki kiertää lyhintä tietä takaisin valittuun */
+    const m = mod5(rinkiValinta - valittuI);
+    rinkiValinta += m <= 2 ? -m : 5 - m;
+  }
+});
 /* Hyppy nousee 2,10 m (vy²/2g) ja kestää 0,73 s. Alkuperäinen 9,2 / 26
    nousi 1,63 m, mikä ei riittänyt korotetun matalan puomin yli. */
 const HYPPY_VY = 11.6, PAINOVOIMA = 32;
@@ -1561,6 +1719,164 @@ for (let i = 0; i < 26; i++) {
 }
 
 /* ---------- state ---------- */
+/* ---------- etapit ----------
+   Peli on loputon, joten palkki näyttää matkan seuraavaan tavoitteeseen:
+   muiden pelaajien tuloksiin sijoilla 50, 25, 10, 5, 3, 2 ja 1 sekä omaan
+   ennätykseen. Jokainen etappi on tiellä poikittainen viiva, jonka yli
+   juostaan. Muut etapit ovat kultaisia ja niiden edessä lukee maassa,
+   mikä etappi on kyseessä. Oma ennätys on ruutulippu: ruudullinen viiva
+   ja sen yllä tien ylittävä OMA ENNÄTYS -banderolli. */
+let etappiData = { oma: 0, etapit: [] };
+let ajo = [];                       /* tämän juoksun etapit nousevassa järjestyksessä */
+document.addEventListener('liina:tavoitteet', e => { etappiData = e.detail; });
+
+const ETAPPI_LEVEYS = 6.6;          /* koko ajorata reunasta reunaan */
+function ruudut(g, x0, y0, w, h, koko) {
+  for (let y = 0; y * koko < h; y++) for (let x = 0; x * koko < w; x++) {
+    g.fillStyle = (x + y) % 2 ? '#111418' : '#ffffff';
+    g.fillRect(x0 + x * koko, y0 + y * koko, koko, koko);
+  }
+}
+function etappiTeksti(teksti, vari) {
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 160;
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.piirra = txt => {
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, c.width, c.height);
+    let koko = 118;
+    g.font = `800 ${koko}px 'Baloo 2', Nunito, sans-serif`;
+    while (g.measureText(txt).width > c.width - 60 && koko > 50) { koko -= 6; g.font = `800 ${koko}px 'Baloo 2', Nunito, sans-serif`; }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineJoin = 'round'; g.lineWidth = 16; g.strokeStyle = 'rgba(18,21,26,.85)';
+    g.strokeText(txt, c.width / 2, c.height / 2 + 6);
+    g.fillStyle = vari; g.fillText(txt, c.width / 2, c.height / 2 + 6);
+    t.needsUpdate = true;
+  };
+  t.piirra(teksti);
+  return t;
+}
+
+/* Kultaisen etapin banderolli: keltainen pohja, tumma reunus ja teksti. */
+function banderolliTeksti() {
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 128;
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.piirra = txt => {
+    const g = c.getContext('2d');
+    g.fillStyle = '#b97f00'; g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = '#ffd60a'; g.fillRect(0, 10, c.width, c.height - 20);
+    let koko = 80;
+    g.font = `800 ${koko}px 'Baloo 2', Nunito, sans-serif`;
+    while (g.measureText(txt).width > c.width - 80 && koko > 40) { koko -= 4; g.font = `800 ${koko}px 'Baloo 2', Nunito, sans-serif`; }
+    g.fillStyle = '#12305e';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(txt, c.width / 2, c.height / 2 + 5);
+    t.needsUpdate = true;
+  };
+  return t;
+}
+const BANDEROLLI_LEVEYS = ETAPPI_LEVEYS + 0.8;
+const kultaTolppaMat = toon(0xffd60a, { emissive: 0x3a2700, emissiveIntensity: 0.3 });
+
+const kultaViivat = [];
+for (let i = 0; i < 7; i++) {
+  const g = new THREE.Group();
+  const viiva = new THREE.Mesh(new THREE.PlaneGeometry(ETAPPI_LEVEYS, 0.5),
+    new THREE.MeshBasicMaterial({ color: 0xffd60a }));
+  viiva.rotation.x = -Math.PI / 2; viiva.position.y = 0.025;
+  const tex = etappiTeksti('', '#ffd60a');
+  const kirjoitus = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 0.9),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+  /* luettava takaa tulevan kameran suunnasta; viivan edessä juoksijaan päin */
+  kirjoitus.rotation.x = -Math.PI / 2; kirjoitus.position.set(0, 0.03, 1.5);
+  /* banderolli samalla korkeudella kuin oman ennätyksen lipussa */
+  const banTex = banderolliTeksti();
+  const banderolli = new THREE.Mesh(new THREE.BoxGeometry(BANDEROLLI_LEVEYS, 0.9, 0.15),
+    toon(0xffffff, { map: banTex }));
+  banderolli.position.y = 5.5;
+  for (const sx of [-1, 1]) {
+    const tolppa = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 5.95, 12), kultaTolppaMat);
+    tolppa.position.set(sx * BANDEROLLI_LEVEYS / 2, 2.975, 0); tolppa.castShadow = true;
+    g.add(tolppa);
+  }
+  g.add(viiva, kirjoitus, banderolli);
+  g.visible = false;
+  g.userData.tex = tex;
+  g.userData.banTex = banTex;
+  scene.add(g);
+  kultaViivat.push(g);
+}
+
+const omaLippu = (() => {
+  const g = new THREE.Group();
+  const ruutuTex = canvasTex(512, 64, (c, w, h) => ruudut(c, 0, 0, w, h, 32));
+  const viiva = new THREE.Mesh(new THREE.PlaneGeometry(ETAPPI_LEVEYS, 0.82),
+    new THREE.MeshBasicMaterial({ map: ruutuTex }));
+  viiva.rotation.x = -Math.PI / 2; viiva.position.y = 0.025;
+  /* banderolli on kameran yläpuolella (kamera 4,2–4,7 m), autojen ja
+     korkean puomin kyltin (3,8 m) yläpuolella */
+  const leveys = ETAPPI_LEVEYS + 0.8;
+  const banderolliTex = canvasTex(1024, 128, (c, w, h) => {
+    ruudut(c, 0, 0, w, h, 32);
+    c.fillStyle = '#ffffff';
+    c.beginPath(); c.roundRect(220, 16, w - 440, h - 32, 18); c.fill();
+    c.fillStyle = '#111418';
+    c.font = "800 78px 'Baloo 2', Nunito, sans-serif";
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText('OMA ENNÄTYS', w / 2, h / 2 + 5);
+  });
+  const banderolli = new THREE.Mesh(new THREE.BoxGeometry(leveys, 0.9, 0.15),
+    toon(0xffffff, { map: banderolliTex }));
+  banderolli.position.y = 5.5;
+  const tolppaMat = toon(0xe8ecef);
+  for (const sx of [-1, 1]) {
+    const tolppa = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 5.95, 12), tolppaMat);
+    tolppa.position.set(sx * leveys / 2, 2.975, 0); tolppa.castShadow = true;
+    g.add(tolppa);
+  }
+  g.add(viiva, banderolli);
+  g.visible = false;
+  scene.add(g);
+  return g;
+})();
+
+function rakennaEtapit() {
+  const lista = [];
+  if (etappiData.oma > 0) lista.push({ m: etappiData.oma, oma: true, otsikko: 'OMA ENNÄTYS', obj: omaLippu });
+  for (const e of etappiData.etapit || []) {
+    if (!(e.paras > 0)) continue;
+    const otsikko = e.sija === 1 ? 'KÄRKI' : e.sija <= 10 ? `TOP ${e.sija}` : `SIJA ${e.sija}`;
+    lista.push({ m: e.paras, sija: e.sija, nimi: e.nimimerkki, otsikko });
+  }
+  lista.sort((a, b) => a.m - b.m || (a.sija || 99) - (b.sija || 99));
+  let k = 0;
+  for (const e of lista) {
+    if (e.oma) continue;
+    e.obj = kultaViivat[k++];
+    e.obj.userData.tex.piirra(`${e.otsikko} · ${e.nimi}`);
+    e.obj.userData.banTex.piirra(`${e.otsikko} · ${e.nimi}`);
+  }
+  for (const g of [omaLippu, ...kultaViivat]) g.visible = false;
+  ajo = lista.map(e => ({ ...e, ohitettu: false }));
+}
+
+let ilmoitusAjastin = null;
+function ilmoitaEtappi(e) {
+  const el = ui.etappiIlmoitus;
+  if (!el) return;
+  const nimi = document.createElement('small');
+  el.textContent = e.oma ? 'UUSI ENNÄTYS!' : `${e.otsikko}!`;
+  nimi.textContent = e.oma ? 'Ohitit oman parhaasi' : `Ohitit ${e.nimi}`;
+  el.append(nimi);
+  el.classList.toggle('oma', !!e.oma);
+  el.classList.add('nakyy');
+  clearTimeout(ilmoitusAjastin);
+  ilmoitusAjastin = setTimeout(() => el.classList.remove('nakyy'), 1900);
+}
+
 /* Pelaajan tilillä olevat potkulaudat: jokainen juoksu alkaa niillä. */
 let varastoLaudat = 0;
 const S = {
@@ -1579,8 +1895,12 @@ const ui = {
   score: document.getElementById('score'),
   coins: document.getElementById('coins'),
   kauppa: document.getElementById('avaaKauppa'),
+  jahtaajaNimi: document.getElementById('jahtaajaNimi'),
   meters: document.getElementById('meters'),
   bar: document.getElementById('bar'),
+  bot: document.getElementById('bot'),
+  etappiNimi: document.getElementById('etappiNimi'),
+  etappiIlmoitus: document.getElementById('etappiIlmoitus'),
   gap: document.getElementById('gap'),
   boost: document.getElementById('boost'),
   scootBtn: document.getElementById('scoot'),
@@ -1605,6 +1925,7 @@ function start() {
   ui.intro.style.opacity = '0';
   ui.intro.classList.add('pois');
   S.started = true;
+  rakennaEtapit();
   document.dispatchEvent(new CustomEvent('liina:alku'));
 }
 /* Rullaava maisema takaisin lähtöasemiin. Ilman tätä etusivulle
@@ -1637,6 +1958,7 @@ function reset() {
   if (document.body.classList.contains('taulu-auki')) return;
   nollaaMaailma();
   S.started = true;
+  rakennaEtapit();
   document.dispatchEvent(new CustomEvent('liina:alku'));
 }
 
@@ -1648,7 +1970,29 @@ const jalat = new THREE.Vector3();
 document.addEventListener('liina:varasto', e => {
   varastoLaudat = Math.max(0, Math.min(5, e.detail.potkulaudat | 0));
   if (!S.started) S.scoots = varastoLaudat;
+  if (e.detail.jahtaaja) asetaValittu(e.detail.jahtaaja);
 });
+
+/* Valinta vaihtuu kaupassa tai tulee palvelimelta käynnistyksessä. Kaupan
+   ollessa kiinni rinki käännetään suoraan valitun kohdalle, jotta hän
+   seisoo etusivun paikalla. Juoksun aikana vaihto odottaa seuraavaa kertaa. */
+function asetaValittu(id) {
+  const i = JAHTAAJAT.findIndex(j => j.id === id && !j.tyhja);
+  const uusi = i < 0 ? 0 : i;
+  lataaJahtaajaMalli(JAHTAAJAT[uusi].id);
+  const nimi = document.getElementById('gapNimi');
+  if (nimi) nimi.textContent = JAHTAAJAT[uusi].nimi.toUpperCase();
+  const etusivunNimi = document.getElementById('jahtaajaNimi');
+  if (etusivunNimi) etusivunNimi.textContent = JAHTAAJAT[uusi].nimi;
+  if (uusi === valittuI || S.started) return;
+  valittu().group.visible = kauppaK > 0;
+  valittuI = uusi;
+  valittu().group.visible = true;
+  if (kauppaK === 0) {
+    rinkiValinta = valittuI;
+    rinkiKulma = valittuI * RINKI.askel;
+  }
+}
 
 function palaaEtusivulle() {
   nollaaMaailma();
@@ -1738,12 +2082,22 @@ function tick() {
   if (S.started && !S.over) {
     S.speed = Math.min(31, S.speed + dt * 0.4);
     if (S.boost > 0) S.boost = Math.max(0, S.boost - dt);
-    S.dist += S.speed * dt;
+    /* boosti nopeuttaa juoksua, joten matkaa kertyy samaa vauhtia kuin maisema liikkuu */
+    S.dist += S.speed * (S.boost > 0 ? 1.5 : 1) * dt;
     S.kesto += dt;
-    S.score += S.speed * dt * 3;
+    S.score = S.dist;               /* tulos on juostu matka metreinä */
     S.gap = Math.max(10.6, S.gap - dt * 0.06);
   }
   const v = S.started && !S.over ? S.speed * (S.boost > 0 ? 1.5 : 1) : 0;
+
+  /* etapit: paikka lasketaan suoraan matkasta, joten ne eivät ajelehdi */
+  for (const e of ajo) {
+    const z = -(e.m - S.dist);
+    e.obj.position.z = z;
+    e.obj.visible = S.started && z > -240 && z < 16;
+    if (S.started && !S.over && !e.ohitettu && S.dist > e.m) { e.ohitettu = true; ilmoitaEtappi(e); }
+  }
+  if (!S.started) for (const g of [omaLippu, ...kultaViivat]) g.visible = false;
 
   /* scroll world */
   for (const b of sides[0]) b.position.z += v * dt;
@@ -1765,7 +2119,7 @@ function tick() {
     t.userData.spin.rotation.y += dt * 5.2;
     if (t.position.z > 16) { t.position.z -= 360; t.visible = true; t.position.x = (Math.floor(Math.random() * 3) - 1) * LANE_W; }
     if (t.visible && Math.abs(t.position.z) < 1.4 && Math.abs(t.position.x - S.laneX) < 1.1 && S.y < 1.8) {
-      t.visible = false; S.boost = 4; S.score += 150;
+      t.visible = false; S.boost = 4;
     }
   }
 
@@ -1778,7 +2132,7 @@ function tick() {
       t.position.x = (Math.floor(Math.random() * 3) - 1) * LANE_W;
     }
     if (t.visible && Math.abs(t.position.z) < 1.6 && Math.abs(t.position.x - S.laneX) < 1.2 && S.y < 1.8) {
-      t.visible = false; S.scoots++; S.laudatKeratyt++; S.score += 75;
+      t.visible = false; S.scoots++; S.laudatKeratyt++;
     }
   }
 
@@ -1803,7 +2157,7 @@ function tick() {
     c.rotation.z += dt * 4;
     if (c.position.z > 14) { c.position.z -= 26 * 5; c.visible = true; c.position.x = (Math.floor(Math.random() * 3) - 1) * LANE_W; }
     if (c.visible && Math.abs(c.position.z) < 1.2 && Math.abs(c.position.x - S.laneX) < 1.0 && S.y < 1.6) {
-      c.visible = false; S.coins += S.boost > 0 ? 2 : 1; S.score += S.boost > 0 ? 50 : 25;
+      c.visible = false; S.coins += S.boost > 0 ? 2 : 1;
     }
   }
 
@@ -1921,24 +2275,80 @@ function tick() {
 
   const tSwing = Math.sin(runPhase * 0.92 + 1.2);
   if (!S.started) {
-    /* Etusivu: Tervis Liinan vierellä hieman takana, siemailee maitokahvia. */
+    /* Etusivu: Tervis Liinan vierellä hieman takana, siemailee maitokahvia.
+       Kaupassa kaikki viisi seisovat ringissä ja kävelevät uusille
+       paikoilleen, kun rinkiä kierretään. */
+    const tavoite = rinkiValinta * RINKI.askel;
+    const ero = tavoite - rinkiKulma;
+    rinkiKulma += ero * Math.min(1, dt * 5);
+    const kavelee = Math.abs(ero) > 0.02;
+    if (kavelee) rinkiVaihe += dt * 9;
+    const kaapu = pehmeasti(Math.min(1, Math.max(0, (kauppaK - 0.25) / 0.6)));  /* muiden esiinnousu */
+    rinkiKorostus.material.opacity = kaapu * (0.55 + 0.25 * Math.sin(S.t * 3));
     const siemaus = 0.5 + 0.5 * Math.sin(S.t * 0.9);
-    tervis.group.position.set(ASETELMA.tervis[0], Math.max(0, Math.sin(S.t * 1.6 + 1)) * 0.012, ASETELMA.tervis[1]);
-    tervis.group.rotation.y = ASETELMA.tervis[2];
-    tervis.legs[0].rotation.x = 0; tervis.legs[1].rotation.x = 0;
-    tervis.arms[0].rotation.x = 0.04;
-    tervis.arms[1].rotation.x = 0.55 + siemaus * 0.55;
+    JAHTAAJAT.forEach((j, i) => {
+      const h = j.hahmo;
+      const fi = rinkiKulma - i * RINKI.askel;
+      const x = RINKI.keski[0] + Math.sin(fi) * RINKI.sade;
+      const z = RINKI.keski[1] - Math.cos(fi) * RINKI.sade;
+      const etu = Math.pow(Math.max(0, Math.cos(fi)), 6);       /* 1 etupaikalla */
+      const perus = h === tervis ? 1.06 : 1;
+      if (i !== valittuI) {
+        h.group.visible = kaapu > 0.01;
+        h.group.scale.setScalar(perus * kaapu * (1 + 0.08 * etu));
+      } else {
+        h.group.visible = true;
+        h.group.scale.setScalar(perus * (1 + 0.08 * etu * kaapu));
+      }
+      const hengitys = Math.max(0, Math.sin(S.t * 1.6 + i)) * 0.012;
+      const askel = kavelee ? Math.abs(Math.cos(rinkiVaihe + i)) * 0.04 : hengitys;
+      h.group.position.set(x, askel, z);
+      /* kasvot kameraan; etusivulla valittu katsoo hieman keskustaa kohti */
+      const kohti = Math.atan2(-(camera.position.x - x), -(camera.position.z - z));
+      h.group.rotation.y = i === valittuI && kauppaK < 1
+        ? ASETELMA.tervis[2] + (kohti - ASETELMA.tervis[2]) * pehmeasti(kauppaK)
+        : kohti;
+      const sw = kavelee ? Math.sin(rinkiVaihe + i) * 0.55 : 0;
+      h.legs[0].rotation.x = sw; h.legs[1].rotation.x = -sw;
+      if (h === tervis) {
+        h.arms[0].rotation.x = 0.04 - sw * 0.4;
+        h.arms[1].rotation.x = 0.55 + siemaus * 0.55;
+      } else {
+        /* kädet hieman ulospäin: arms[0] on -x-puolella, joten negatiivinen
+           z-kierto vie käden ulos ja positiivinen arms[1]:llä */
+        const lev = h.levitys ?? 0.06;
+        h.arms[0].rotation.x = -sw * 0.6; h.arms[0].rotation.z = -lev;
+        h.arms[1].rotation.x = sw * 0.6; h.arms[1].rotation.z = lev;
+      }
+      /* nimi pään yläpuolelle; etupaikan nimi isompana */
+      const nimi = rinkiNimet[i];
+      if (kaapu > 0.01) {
+        nimiPiste.set(x, ((h.korkeus || 2.75) + 0.17) * h.group.scale.y + 0.08, z).project(camera);
+        const alue = renderer.domElement.getBoundingClientRect();
+        nimi.style.transform = `translate(${alue.left + (nimiPiste.x + 1) / 2 * alue.width}px, ` +
+          `${alue.top + (1 - nimiPiste.y) / 2 * alue.height}px) translate(-50%, -100%) scale(${0.72 + 0.38 * etu})`;
+        /* vain etupaikan nimi näkyy; se häivyttyy vaihtuessa */
+        nimi.style.opacity = String(kaapu * Math.pow(etu, 1.5));
+        nimi.classList.toggle('valittu', etu > 0.9);
+        nimi.style.zIndex = String(Math.round(etu * 10));
+      } else {
+        nimi.style.opacity = '0';
+      }
+    });
   } else {
-    tervis.group.rotation.y = 0;
-    const tavoiteZ = S.over ? Math.max(3.4, tervis.group.position.z - dt * 5) : S.gap;
-    /* lähtiessä Tervis siirtyy etusivun paikaltaan jahtiin liukuen, ei hypäten */
-    tervis.group.position.z += (tavoiteZ - tervis.group.position.z) * (S.over ? 1 : Math.min(1, dt * 2.5));
-    tervis.group.position.x += ((S.laneX * 0.7) - tervis.group.position.x) * Math.min(1, dt * 3);
-    tervis.legs[0].rotation.x = tSwing * 1.0;
-    tervis.legs[1].rotation.x = -tSwing * 1.0;
-    tervis.arms[0].rotation.x = -tSwing * 0.8;
-    tervis.arms[1].rotation.x = tSwing * 0.5;
-    tervis.group.position.y = Math.abs(Math.cos(runPhase * 0.92)) * 0.06;
+    const J = valittu();
+    for (const j of JAHTAAJAT) if (j.hahmo !== J) j.hahmo.group.visible = false;
+    rinkiKorostus.material.opacity = 0;
+    J.group.rotation.y = 0;
+    const tavoiteZ = S.over ? Math.max(3.4, J.group.position.z - dt * 5) : S.gap;
+    /* lähtiessä jahtaaja siirtyy etusivun paikaltaan jahtiin liukuen, ei hypäten */
+    J.group.position.z += (tavoiteZ - J.group.position.z) * (S.over ? 1 : Math.min(1, dt * 2.5));
+    J.group.position.x += ((S.laneX * 0.7) - J.group.position.x) * Math.min(1, dt * 3);
+    J.legs[0].rotation.x = tSwing * 1.0;
+    J.legs[1].rotation.x = -tSwing * 1.0;
+    J.arms[0].rotation.x = -tSwing * 0.8;
+    J.arms[1].rotation.x = tSwing * 0.5;
+    J.group.position.y = Math.abs(Math.cos(runPhase * 0.92)) * 0.06;
   }
 
   /* collisions */
@@ -1958,11 +2368,12 @@ function tick() {
         } else {
           S.over = true; S.shake = 0.5;
           ui.over.style.opacity = '1'; ui.over.classList.remove('pois');
-          ui.overText.textContent = 'Tervis sai kiinni · ' + Math.round(S.dist) + '\u00a0m';
+          ui.overText.textContent = JAHTAAJAT[valittuI].nimi + ' sai kiinni · ' + Math.round(S.dist) + '\u00a0m';
           /* valikko.js tallentaa tuloksen ja päättää, onko kyse ennätyksestä */
           document.dispatchEvent(new CustomEvent('liina:loppu', { detail: {
             pisteet: Math.round(S.score), matka: Math.round(S.dist), kesto: +S.kesto.toFixed(2),
-            kolikot: S.coins, laudatKeratyt: S.laudatKeratyt, laudatKaytetyt: S.laudatKaytetyt
+            kolikot: S.coins, laudatKeratyt: S.laudatKeratyt, laudatKaytetyt: S.laudatKaytetyt,
+            jahtaaja: JAHTAAJAT[valittuI].nimi
           } }));
         }
     }
@@ -2003,10 +2414,16 @@ function tick() {
   /* Kauppa-nappi seuraa jahtaajan jalkoja etusivulla */
   if (!S.started && ui.kauppa) {
     camera.updateMatrixWorld();
-    jalat.set(tervis.group.position.x, 0, tervis.group.position.z - 0.3).project(camera);
+    jalat.set(valittu().group.position.x, 0, valittu().group.position.z - 0.3).project(camera);
     const alue = renderer.domElement.getBoundingClientRect();
     ui.kauppa.style.transform = `translate(${alue.left + (jalat.x + 1) / 2 * alue.width}px, ` +
       `${alue.top + (1 - jalat.y) / 2 * alue.height}px) translate(-50%, 6px)`;
+    if (ui.jahtaajaNimi) {
+      const h = valittu(), g = h.group;
+      jalat.set(g.position.x, ((h.korkeus || 2.75) + 0.07) * g.scale.y, g.position.z).project(camera);
+      ui.jahtaajaNimi.style.transform = `translate(${alue.left + (jalat.x + 1) / 2 * alue.width}px, ` +
+        `${alue.top + (1 - jalat.y) / 2 * alue.height}px) translate(-50%, -100%)`;
+    }
   }
   sun.position.set(S.laneX + 9, 16, 8);
   sun.target.position.set(S.laneX, 0, -4);
@@ -2014,11 +2431,31 @@ function tick() {
 
   /* hud */
   if (ui.score) {
-    ui.score.textContent = Math.round(S.score).toLocaleString('fi-FI');
+    ui.score.textContent = Math.round(S.dist).toLocaleString('fi-FI');
     ui.coins.textContent = S.coins;
-    const left = Math.max(0, 900 - Math.round(S.dist));
-    ui.meters.textContent = left + ' m → MASCOT';
-    ui.bar.style.width = Math.min(100, (S.dist / 900) * 100) + '%';
+    /* palkki: edellisestä ohitetusta etapista seuraavaan */
+    const seuraava = ajo.find(e => !e.ohitettu);
+    const ohitetut = ajo.filter(e => e.ohitettu);
+    const edellinen = ohitetut.length ? ohitetut[ohitetut.length - 1].m : 0;
+    let nimi, oikea, osuus, kulta = false;
+    if (seuraava) {
+      nimi = seuraava.nimi ? `${seuraava.otsikko} · ${seuraava.nimi}` : seuraava.otsikko;
+      oikea = Math.max(0, Math.ceil(seuraava.m - S.dist)).toLocaleString('fi-FI') + ' m';
+      osuus = (S.dist - edellinen) / Math.max(1, seuraava.m - edellinen);
+    } else if (ajo.length) {
+      kulta = true;
+      nimi = ohitetut.some(e => e.sija === 1) ? 'UUSI KÄRKI' : 'UUSI ENNÄTYS';
+      oikea = '+' + Math.round(S.dist - edellinen).toLocaleString('fi-FI') + ' m';
+      osuus = 1;
+    } else {
+      nimi = 'ENSIMMÄINEN ENNÄTYS';
+      oikea = Math.round(S.dist).toLocaleString('fi-FI') + ' m';
+      osuus = 0;
+    }
+    if (ui.etappiNimi) ui.etappiNimi.textContent = nimi;
+    ui.meters.textContent = oikea;
+    ui.bar.style.width = Math.min(100, Math.max(0, osuus * 100)) + '%';
+    if (ui.bot) ui.bot.classList.toggle('kulta', kulta);
     if (ui.boost) {
       ui.boost.textContent = S.boost > 0 ? 'BOOST ' + S.boost.toFixed(1) + ' s' : 'x1';
       ui.boost.style.background = S.boost > 0 ? '#f2600c' : '#ffd60a';
@@ -2043,5 +2480,5 @@ function tick() {
 }
 scene.add(sun.target);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => texRegistry.forEach(f => f()));
-window.__liina = { camera, scene, S, museo, get museoMalli() { return museoMalli; }, mascot, liina, tervis, cars, cans, coins, scoots, rideScoot, kaytaScootti, palaaEtusivulle, ASETELMA, puomit, roll, sijoitaPuomi, asetaTyyppi, PUOMI, liikeSlot, liikeMuodot, valitseLiike };
+window.__liina = { camera, scene, S, JAHTAAJAT, museo, get museoMalli() { return museoMalli; }, mascot, liina, tervis, cars, cans, coins, scoots, rideScoot, kaytaScootti, palaaEtusivulle, ASETELMA, puomit, roll, sijoitaPuomi, asetaTyyppi, PUOMI, liikeSlot, liikeMuodot, valitseLiike };
 tick();

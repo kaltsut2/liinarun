@@ -43,7 +43,7 @@ niin että alahelma ja ikkunapanta työntyvät esiin).
 - Runko Cylinder(0.17, 0.17, 0.52, 28, openEnded), canvas-tekstuuri 1024 × 512:
   pystygradientti `#4c525a` → `#33383e` → `#22262b`, kaksi oranssia `#f2600c`
   vinoraitaa, teksti **NOCCO** (Baloo 2 800, valkoinen), **FOCUS** (`#12151a`),
-  **KOFFEIINI 180 mg**. Kuvio piirretään kahteen kertaan (ox = 0 ja w/2) jotta
+  **KOFEIINI 180 mg**. Kuvio piirretään kahteen kertaan (ox = 0 ja w/2) jotta
   logo lukee mistä tahansa kulmasta.
 - Olkapää Cylinder(0.13, 0.17, 0.07) `#2b2f35`, kansi Cylinder(0.125) kromi, jalka `#23272c`.
 - Scale 1.45, oranssi halo Torus(0.42, 0.05) `#f2600c` vaakatasossa.

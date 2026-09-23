@@ -443,11 +443,13 @@ $$;
 -- Suorituksen tallennus. Tarkistaa uskottavuuden, päivittää ennätyksen,
 -- lisää juoksun kolikot tilille ja päivittää potkulautavaraston.
 --
+-- Tulos on juostu matka metreinä: pisteitä ei lasketa erikseen, joten
+-- p_pisteet otetaan vastaan vain vanhojen versioiden vuoksi eikä sitä
+-- käytetä mihinkään.
+--
 -- Rajat tulevat pelin fysiikasta:
---   vauhti on enintään 31 m/s          → matka ≤ kesto × 31 + 10
---   metriltä 3 pistettä, kolikoista
---   boostilla enintään noin 15/m,
---   tölkit ja laudat noin 2/m          → pisteet ≤ matka × 22 + 500
+--   vauhti on enintään 31 m/s, NOCCO-boostilla hetkellisesti 1,5-kertainen;
+--   tölkkejä on korkeintaan noin kolmannes ajasta → matka ≤ kesto × 40 + 10
 --   kolikko viiden metrin välein,
 --   boostilla kaksinkertaisena         → kolikot ≤ matka × 0,4 + 20
 --   potkulauta noin 140 m välein       → kerätyt laudat ≤ matka / 130 + 2
@@ -479,12 +481,10 @@ declare
   v_uusi      boolean;
   v_paras     integer;
 begin
-  if p_pisteet is null or p_matka is null or p_kesto is null
-     or p_pisteet < 0 or p_pisteet > 5000000
+  if p_matka is null or p_kesto is null
      or p_matka   < 0 or p_matka   > 1000000
      or p_kesto   < 0.5 or p_kesto > 36000
-     or p_matka   > p_kesto * 31 + 10
-     or p_pisteet > p_matka * 22 + 500
+     or p_matka   > p_kesto * 40 + 10
      or coalesce(p_kolikot, 0) < 0 or coalesce(p_kolikot, 0) > p_matka * 0.4 + 20
      or coalesce(p_laudat_keratyt, 0) < 0 or coalesce(p_laudat_keratyt, 0) > p_matka / 130.0 + 2
      or coalesce(p_laudat_kaytetyt, 0) < 0 then
@@ -504,9 +504,9 @@ begin
   end if;
 
   insert into public.tulokset (pelaaja_id, pisteet, matka, kesto, kolikot)
-  values (v_pelaaja, p_pisteet, p_matka, p_kesto, coalesce(p_kolikot, 0));
+  values (v_pelaaja, p_matka, p_matka, p_kesto, coalesce(p_kolikot, 0));
 
-  v_uusi := p_pisteet > v_rivi.paras;
+  v_uusi := p_matka > v_rivi.paras;
 
   update public.pelaajat
      set kolikot     = kolikot + coalesce(p_kolikot, 0),
@@ -517,11 +517,11 @@ begin
   -- silloin kun ennätys oikeasti muuttuu.
   if v_uusi then
     update public.pelaajat
-       set paras = p_pisteet, paras_aika = now()
+       set paras = p_matka, paras_aika = now()
      where id = v_pelaaja;
   end if;
 
-  v_paras := greatest(v_rivi.paras, p_pisteet);
+  v_paras := greatest(v_rivi.paras, p_matka);
   return (json_build_object(
     'uusi_ennatys', v_uusi,
     'edellinen',    v_rivi.paras,
@@ -651,6 +651,38 @@ end;
 $$;
 
 
+-- Juoksun etapit: muiden pelaajien tulokset sijoilla 50, 25, 10, 5, 3, 2
+-- ja 1 sekä oma ennätys. Oma rivi jätetään pois, jotta sijan N raja on
+-- se tulos, jonka ylittämällä pelaaja nousee sijalle N. Nimimerkit
+-- näytetään juoksun aikana ohitettavina.
+create or replace function public.tavoitteet(p_tunnus text)
+returns json
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_pelaaja uuid := public._pelaaja_tunnuksella(p_tunnus);
+begin
+  return json_build_object(
+    'oma', (select paras from public.pelaajat where id = v_pelaaja),
+    'etapit', coalesce((
+      with muut as (
+        select nimimerkki, paras,
+               row_number() over (order by paras desc, paras_aika asc) as rivi
+          from public.pelaajat
+         where paras > 0 and id <> v_pelaaja
+      )
+      select json_agg(json_build_object('sija', rivi, 'paras', paras, 'nimimerkki', nimimerkki)
+                      order by rivi)
+        from muut
+       where rivi in (1, 2, 3, 5, 10, 25, 50)
+    ), '[]'::json)
+  );
+end;
+$$;
+
 -- Uloskirjautuminen: poistaa tämän laitteen istunnon, jolloin laitteelle
 -- jäänyt tunnus ei enää kelpaa. Muiden laitteiden istunnot säilyvät.
 create or replace function public.kirjaudu_ulos(p_tunnus text)
@@ -730,6 +762,7 @@ revoke all on function public.kirjaudu(text, text)           from public, anon, 
 revoke all on function public.oma_tila(text)                 from public, anon, authenticated;
 revoke all on function public.tallenna_tulos(text, integer, integer, numeric, integer, integer, integer) from public, anon, authenticated;
 revoke all on function public.kauppa(text)                   from public, anon, authenticated;
+revoke all on function public.tavoitteet(text)               from public, anon, authenticated;
 revoke all on function public.osta_jahtaaja(text, text)      from public, anon, authenticated;
 revoke all on function public.valitse_jahtaaja(text, text)   from public, anon, authenticated;
 revoke all on function public.tulostaulu(text)               from public, anon, authenticated;
@@ -740,6 +773,7 @@ grant execute on function public.kirjaudu(text, text)           to anon, authent
 grant execute on function public.oma_tila(text)                 to anon, authenticated;
 grant execute on function public.tallenna_tulos(text, integer, integer, numeric, integer, integer, integer) to anon, authenticated;
 grant execute on function public.kauppa(text)                   to anon, authenticated;
+grant execute on function public.tavoitteet(text)               to anon, authenticated;
 grant execute on function public.osta_jahtaaja(text, text)      to anon, authenticated;
 grant execute on function public.valitse_jahtaaja(text, text)   to anon, authenticated;
 grant execute on function public.tulostaulu(text)               to anon, authenticated;
@@ -762,3 +796,22 @@ begin
   end if;
 end;
 $$;
+
+
+-- ---------------------------------------------------------------
+--  Pisteet = metrit (syyskuu 2026)
+--
+--  Aiemmin pisteitä kertyi metreistä, kolikoista, tölkeistä ja
+--  laudoista. Nyt tulos on pelkkä matka. Jokaisen ennätykseksi lasketaan
+--  hänen pisin hyväksytty juoksunsa, ja ennätyksen ajaksi sen juoksun
+--  aika. Uudelleen ajettaessa tulos on sama, koska uudet ennätykset ovat
+--  jo metrejä.
+-- ---------------------------------------------------------------
+
+update public.pelaajat p
+   set paras = t.matka, paras_aika = t.luotu
+  from (select distinct on (pelaaja_id) pelaaja_id, matka, luotu
+          from public.tulokset
+         order by pelaaja_id, matka desc, luotu asc) t
+ where t.pelaaja_id = p.id
+   and p.paras is distinct from t.matka;

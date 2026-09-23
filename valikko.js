@@ -33,7 +33,7 @@ export function paivitaKuka() {
   const onParas = pelaaja.paras > 0;
   el('kukaParasOtsikko').hidden = !onParas;
   el('kukaParas').hidden = !onParas;
-  el('kukaParas').textContent = onParas ? fi(pelaaja.paras) : '';
+  el('kukaParas').textContent = onParas ? `${fi(pelaaja.paras)} m` : '';
   el('kukaKolikot').textContent = fi(pelaaja.kolikot);
 }
 document.addEventListener('liina:tunnistettu', paivitaKuka);
@@ -46,7 +46,7 @@ function rivi({ sija, nimimerkki, paras, oma }) {
   const mitali = sija <= 3;
   if (mitali) li.classList.add('mitali', `mitali-${sija}`);
   /* mitalin sisällä pelkkä numero, muilla rivin tapaan piste perässä */
-  for (const [luokka, teksti] of [['sija', mitali ? `${sija}` : `${sija}.`], ['nimi', nimimerkki], ['pisteet', fi(paras)]]) {
+  for (const [luokka, teksti] of [['sija', mitali ? `${sija}` : `${sija}.`], ['nimi', nimimerkki], ['pisteet', `${fi(paras)} m`]]) {
     const s = document.createElement('span');
     s.className = luokka;
     s.textContent = teksti;
@@ -214,23 +214,41 @@ function naytaLoppu(tulos, ennatys) {
   over.classList.toggle('ennatys', ennatys);
   el('overKicker').textContent = ennatys ? 'UUSI ENNÄTYS' : 'JÄÄT JÄLKEEN';
   if (ennatys) {
-    el('overOtsikko').textContent = fi(tulos.pisteet);
-    el('overText').textContent = `Tervis sai kiinni · ${fi(tulos.matka)}\u00a0m`;
+    el('overOtsikko').textContent = `${fi(tulos.matka)}\u00a0m`;
+    el('overText').textContent = `${tulos.jahtaaja || 'Tervis'} sai kiinni`;
     /* animaatio alkaa alusta jokaisella ennätyksellä */
     const o = el('overOtsikko'); o.style.animation = 'none'; void o.offsetWidth; o.style.animation = '';
   } else {
-    el('overOtsikko').innerHTML = 'TERVIS<br>SAI KIINNI';
-    el('overText').textContent = `${fi(tulos.matka)}\u00a0m`;
+    el('overOtsikko').textContent = (tulos.jahtaaja || 'Tervis').toUpperCase();
+    el('overOtsikko').insertAdjacentHTML('beforeend', '<br>SAI KIINNI');
+    el('overText').textContent = '';
   }
-  el('overLuku').textContent = fi(tulos.pisteet);
+  el('overLuku').textContent = fi(tulos.matka);
 }
 
 function tilaRivi(v) {
   if (v.uusi_ennatys) {
-    return v.edellinen > 0 ? `Sija ${v.sija} · aiempi ennätys ${fi(v.edellinen)}` : `Sija ${v.sija}`;
+    return v.edellinen > 0 ? `Sija ${v.sija} · aiempi ennätys ${fi(v.edellinen)} m` : `Sija ${v.sija}`;
   }
-  return `Ennätyksesi ${fi(v.paras)} · sija ${v.sija}`;
+  return `Ennätyksesi ${fi(v.paras)} m · sija ${v.sija}`;
 }
+
+/* Juoksun etapit: muiden pelaajien tulokset tietyillä sijoilla ja oma
+   ennätys. Haetaan kun laite tunnistetaan ja jokaisen tallennuksen
+   jälkeen, jotta seuraava juoksu alkaa tuoreilla tavoitteilla. Ilman
+   yhteyttä käytetään viimeksi haettuja ja paikallista ennätystä. */
+let etapit = [];
+function kerroTavoitteet() {
+  document.dispatchEvent(new CustomEvent('liina:tavoitteet', { detail: { oma: pelaaja.paras, etapit } }));
+}
+async function haeTavoitteet() {
+  try {
+    const v = await rpc('tavoitteet', { p_tunnus: tunnus() });
+    etapit = v.etapit || [];
+  } catch {}
+  kerroTavoitteet();
+}
+document.addEventListener('liina:tunnistettu', () => { etapit = []; haeTavoitteet(); });
 
 async function tallenna(tulos) {
   const v = await rpc('tallenna_tulos', {
@@ -243,12 +261,14 @@ async function tallenna(tulos) {
   pelaaja.sija = v.sija;
   asetaTili(v);
   paivitaKuka();
+  haeTavoitteet();
   return v;
 }
 
 /* Juoksun vaikutus tiliin heti, ennen palvelimen vastausta: seuraava
    juoksu alkaa oikeilla laudoilla, vaikka yhteys olisi poikki. */
 function kirjaaPaikallisesti(tulos) {
+  if (tulos.matka > pelaaja.paras) { pelaaja.paras = tulos.matka; kerroTavoitteet(); }
   asetaTili({
     kolikot: pelaaja.kolikot + (tulos.kolikot || 0),
     potkulaudat: Math.min(5, Math.max(0,
@@ -267,7 +287,7 @@ document.addEventListener('liina:loppu', async e => {
   /* Ennätys päätetään heti tunnetun ennätyksen perusteella, jotta ruutu
      ei vaihdu kesken lukemisen. Palvelimen vastaus voittaa, jos toinen
      laite on ehtinyt parantaa ennätystä sillä välin. */
-  const arvio = tulos.pisteet > pelaaja.paras;
+  const arvio = tulos.matka > pelaaja.paras;
   naytaLoppu(tulos, arvio);
   el('overKolikot').textContent = tulos.kolikot > 0 ? `+${fi(tulos.kolikot)} kolikkoa tilille` : '';
   el('overTila').textContent = 'Tallennetaan tulosta…';
@@ -292,7 +312,7 @@ document.addEventListener('liina:loppu', async e => {
       /* Tulos jää laitteelle ja lähetetään, kun peli seuraavan kerran
          saa yhteyden. Jonossa pidetään vain paras lähettämätön tulos. */
       jono.lisaa(tulos);
-      if (arvio) { pelaaja.paras = tulos.pisteet; paivitaKuka(); }
+      if (arvio) { pelaaja.paras = tulos.matka; paivitaKuka(); }
       if (nro === loppuNro) el('overTila').textContent = 'Ei yhteyttä. Tulos tallennetaan, kun yhteys palaa.';
     } else if (nro === loppuNro) {
       el('overTila').textContent = err.koodi === 'TULOS_HYLATTY'
@@ -336,9 +356,20 @@ document.addEventListener('liina:tunnistettu', puraJono);
 const asetukset = el('asetukset');
 let ulosVahvistus = false;
 
+/* Pitkä nimimerkki (enintään 16 merkkiä) pienennetään mahtumaan korttiin
+   vieressä olevan todistenapin kanssa. Mitataan vasta, kun kortti näkyy. */
+function sovitaAsetusNimi() {
+  const n = el('asetusNimi');
+  const tila = n.closest('.kortti').clientWidth - 44 - 40;   /* reunat ja nappi */
+  let koko = 24;
+  n.style.fontSize = koko + 'px';
+  while (n.scrollWidth > tila && koko > 14) { koko -= 1; n.style.fontSize = koko + 'px'; }
+}
+
 function piirraAsetukset() {
   el('asetusNimi').textContent = pelaaja.nimimerkki || '';
-  el('asetusParas').textContent = pelaaja.paras > 0 ? fi(pelaaja.paras) : '—';
+  requestAnimationFrame(sovitaAsetusNimi);
+  el('asetusParas').textContent = pelaaja.paras > 0 ? `${fi(pelaaja.paras)} m` : '—';
   el('asetusSija').textContent = pelaaja.paras > 0 && pelaaja.sija ? `sija ${pelaaja.sija}` : 'Ei vielä ennätystä';
   const pin = omaPin();
   el('asetusPin').textContent = pin || '—';
@@ -407,9 +438,89 @@ addEventListener('keydown', e => {
 
 const kauppa = el('kauppa');
 let kauppaAjastin = null;
+let katalogi = null;          /* palvelimen jahtaajat: hinta, saatavuus, omistus */
+let kohdalla = 'tervis';      /* ringin etupaikalla oleva */
+let ostoVahvistus = false, kauppaKesken = false, kauppaVirhe = '';
+
+const KOLIKKO = '<i class="kolikko-ikoni" aria-hidden="true"></i>';
 
 function piirraKauppa() {
   el('kauppaKolikot').textContent = fi(pelaaja.kolikot);
+  const nappi = el('kauppaToiminto');
+  const huomio = el('kauppaHuomio');
+  nappi.className = 'btn kauppa-toiminto';
+  huomio.textContent = kauppaVirhe;
+  const j = katalogi && katalogi.find(k => k.id === kohdalla);
+  if (!j) {
+    nappi.disabled = true;
+    nappi.textContent = katalogi === false ? 'EI YHTEYTTÄ' : '…';
+    return;
+  }
+  nappi.disabled = kauppaKesken;
+  if (!j.saatavilla) {
+    nappi.disabled = true; nappi.classList.add('harmaa');
+    nappi.textContent = 'TULOSSA PIAN';
+  } else if (j.omistettu && pelaaja.jahtaaja === j.id) {
+    nappi.disabled = true; nappi.classList.add('harmaa');
+    nappi.textContent = 'VALITTU';
+  } else if (j.omistettu) {
+    nappi.textContent = 'VALITSE';
+  } else if (pelaaja.kolikot < j.hinta) {
+    nappi.disabled = true; nappi.classList.add('himmea');
+    nappi.innerHTML = `OSTA · ${KOLIKKO} ${fi(j.hinta)}`;
+    if (!kauppaVirhe) huomio.textContent = `Puuttuu ${fi(j.hinta - pelaaja.kolikot)} kolikkoa`;
+  } else if (ostoVahvistus) {
+    nappi.classList.add('vahvista');
+    nappi.textContent = 'VAHVISTA OSTO';
+    if (!kauppaVirhe) huomio.textContent = `${j.nimi} maksaa ${fi(j.hinta)} kolikkoa`;
+  } else {
+    nappi.innerHTML = `OSTA · ${KOLIKKO} ${fi(j.hinta)}`;
+  }
+}
+
+/* toinen pelaaja kirjautui: omistukset haetaan uudelleen */
+document.addEventListener('liina:tunnistettu', () => { katalogi = null; });
+
+document.addEventListener('liina:rinki-kohdalla', e => {
+  kohdalla = e.detail.id;
+  ostoVahvistus = false; kauppaVirhe = '';
+  piirraKauppa();
+});
+
+el('kauppaToiminto').addEventListener('click', async e => {
+  e.currentTarget.blur();
+  const j = katalogi && katalogi.find(k => k.id === kohdalla);
+  if (!j || kauppaKesken) return;
+  kauppaVirhe = '';
+  /* ostossa ensimmäinen painallus pyytää vahvistuksen, toinen ostaa */
+  if (!j.omistettu && !ostoVahvistus) { ostoVahvistus = true; piirraKauppa(); return; }
+  kauppaKesken = true; piirraKauppa();
+  try {
+    const v = await rpc(j.omistettu ? 'valitse_jahtaaja' : 'osta_jahtaaja',
+      { p_tunnus: tunnus(), p_jahtaaja: j.id });
+    if (!j.omistettu) j.omistettu = true;
+    asetaTili(v);
+    paivitaKuka();
+  } catch (err) {
+    kauppaVirhe = viesti(err.koodi);
+    /* saldo on voinut muuttua toisella laitteella: haetaan tuore tila */
+    haeKatalogi();
+  } finally {
+    kauppaKesken = false; ostoVahvistus = false;
+    piirraKauppa();
+  }
+});
+
+async function haeKatalogi() {
+  try {
+    const v = await rpc('kauppa', { p_tunnus: tunnus() });
+    katalogi = v.jahtaajat || [];
+    asetaTili(v);
+    paivitaKuka();
+  } catch {
+    if (!katalogi) katalogi = false;
+  }
+  piirraKauppa();
 }
 
 async function avaaKauppa() {
@@ -419,13 +530,12 @@ async function avaaKauppa() {
   intro.style.opacity = '0';
   intro.classList.add('pois');
   document.dispatchEvent(new CustomEvent('liina:kauppa', { detail: { auki: true } }));
+  ostoVahvistus = false; kauppaVirhe = '';
+  if (katalogi === false) katalogi = null;
   piirraKauppa();
   /* otsikko ja napit tulevat esiin, kun kamera on kääntynyt jahtaajaan */
   kauppaAjastin = setTimeout(() => { kauppa.classList.remove('pois'); kauppa.style.opacity = '1'; }, 900);
-  try {
-    asetaTili(await rpc('kauppa', { p_tunnus: tunnus() }));
-    piirraKauppa(); paivitaKuka();
-  } catch {}
+  haeKatalogi();
 }
 
 function suljeKauppa() {
@@ -441,11 +551,30 @@ function suljeKauppa() {
   }, 1300);
 }
 
+/* Ringin kierto: seuraava (→, pyyhkäisy vasemmalle) kiertää myötäpäivään. */
+const siirraRinkia = suunta => document.dispatchEvent(new CustomEvent('liina:rinki-siirto', { detail: { suunta } }));
+
 el('avaaKauppa').addEventListener('click', e => { e.currentTarget.blur(); avaaKauppa(); });
 el('suljeKauppa').addEventListener('click', e => { e.currentTarget.blur(); suljeKauppa(); });
+el('kauppaEdellinen').addEventListener('click', e => { e.currentTarget.blur(); siirraRinkia(-1); });
+el('kauppaSeuraava').addEventListener('click', e => { e.currentTarget.blur(); siirraRinkia(1); });
 addEventListener('keydown', e => {
-  if (e.key === 'Escape' && document.body.classList.contains('kauppa-auki')) suljeKauppa();
+  if (!document.body.classList.contains('kauppa-auki')) return;
+  if (e.key === 'Escape') suljeKauppa();
+  else if (e.key === 'ArrowRight') { e.preventDefault(); siirraRinkia(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); siirraRinkia(-1); }
 });
+let kauppaVeto = null;
+kauppa.addEventListener('pointerdown', e => {
+  if (e.isPrimary && !e.target.closest('button')) kauppaVeto = { x: e.clientX, y: e.clientY };
+});
+kauppa.addEventListener('pointerup', e => {
+  if (!kauppaVeto) return;
+  const dx = e.clientX - kauppaVeto.x, dy = e.clientY - kauppaVeto.y;
+  kauppaVeto = null;
+  if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) siirraRinkia(dx < 0 ? 1 : -1);
+});
+kauppa.addEventListener('pointercancel', () => { kauppaVeto = null; });
 
 /* ---------------------------------------------------------------
    Ohjeet: etusivun leimasta aukeava korttipakka. Viisi ohjetta on
@@ -554,7 +683,7 @@ function sovitaNimi() {
 
 function piirraTodiste(vahvistettu) {
   el('todisteNimi').textContent = pelaaja.nimimerkki || '';
-  el('todisteParas').textContent = pelaaja.paras > 0 ? fi(pelaaja.paras) : '—';
+  el('todisteParas').textContent = pelaaja.paras > 0 ? `${fi(pelaaja.paras)} m` : '—';
   el('todisteSija').textContent = pelaaja.paras > 0 && pelaaja.sija ? `sija ${pelaaja.sija}` : 'ei vielä ennätystä';
   el('todisteVahvistus').textContent = vahvistettu
     ? `Vahvistettu palvelimelta ${aika(vahvistettu, false)}`

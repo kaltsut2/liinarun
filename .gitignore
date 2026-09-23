@@ -3,3 +3,8 @@
 # Paikallinen esikatselukonfiguraatio, ei jaeta. Skill kuuluu repoon.
 .claude/launch.json
 .claude/settings.local.json
+
+# Hahmojen alkuperäiset mallit pysyvät vain tällä koneella; peli käyttää
+# pakattuja (*_pakattu.glb), jotka tehdään niistä.
+3dmallit/*.glb
+!3dmallit/*_pakattu.glb
