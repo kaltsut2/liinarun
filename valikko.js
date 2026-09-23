@@ -350,7 +350,95 @@ addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if (!todiste.classList.contains('pois')) suljeTodiste();
   else if (document.body.classList.contains('asetukset-auki')) suljeAsetukset();
+  else if (document.body.classList.contains('ohjeet-auki')) suljeOhjeet();
 });
+
+/* ---------------------------------------------------------------
+   Ohjeet: etusivun leimasta aukeava korttipakka. Viisi ohjetta on
+   rivissä, ja niiden välillä liikutaan nuolinapeilla, pisteillä,
+   pyyhkäisemällä tai näppäimistön nuolilla.
+   --------------------------------------------------------------- */
+
+const ohjeet = el('ohjeet');
+const rata = ohjeet.querySelector('.ohjerata');
+const raita = ohjeet.querySelector('.ohjeraita');
+const sivut = [...raita.children];
+const pisteet = el('ohjePisteet');
+let sivu = 0;
+
+sivut.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.setAttribute('aria-label', `Ohje ${i + 1}`);
+  b.addEventListener('click', () => naytaSivu(i));
+  pisteet.append(b);
+});
+
+function naytaSivu(i, liuku = true) {
+  sivu = Math.max(0, Math.min(sivut.length - 1, i));
+  raita.style.transition = liuku ? '' : 'none';
+  raita.style.transform = `translateX(${-sivu * 100}%)`;
+  sivut.forEach((s, k) => { s.inert = k !== sivu; });
+  [...pisteet.children].forEach((b, k) => b.setAttribute('aria-current', String(k === sivu)));
+  el('ohjeEdellinen').disabled = sivu === 0;
+  el('ohjeSeuraava').disabled = sivu === sivut.length - 1;
+}
+
+/* Pyyhkäisy: kortti seuraa sormea, ja riittävän pitkä tai nopea veto
+   vaihtaa korttia. Pystysuuntainen veto jätetään kortin vieritykselle. */
+let veto = null;
+rata.addEventListener('pointerdown', e => {
+  if (!e.isPrimary) return;
+  veto = { x: e.clientX, y: e.clientY, t: performance.now(), dx: 0, vaaka: false };
+});
+rata.addEventListener('pointermove', e => {
+  if (!veto) return;
+  const dx = e.clientX - veto.x, dy = e.clientY - veto.y;
+  if (!veto.vaaka) {
+    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { veto = null; return; }
+    if (Math.abs(dx) < 8) return;
+    veto.vaaka = true;
+    rata.setPointerCapture(e.pointerId);
+  }
+  const reunalla = (sivu === 0 && dx > 0) || (sivu === sivut.length - 1 && dx < 0);
+  veto.dx = reunalla ? dx * 0.3 : dx;
+  raita.style.transition = 'none';
+  raita.style.transform = `translateX(calc(${-sivu * 100}% + ${veto.dx}px))`;
+});
+function lopetaVeto() {
+  if (!veto) return;
+  const { dx, vaaka, t } = veto;
+  veto = null;
+  if (!vaaka) return;
+  const nopea = Math.abs(dx) / (performance.now() - t) > 0.5;
+  const vaihda = Math.abs(dx) > rata.clientWidth * 0.2 || (nopea && Math.abs(dx) > 24);
+  naytaSivu(vaihda ? sivu - Math.sign(dx) : sivu);
+}
+rata.addEventListener('pointerup', lopetaVeto);
+rata.addEventListener('pointercancel', lopetaVeto);
+
+function avaaOhjeet() {
+  naytaSivu(0, false);
+  document.body.classList.add('ohjeet-auki');
+  ohjeet.classList.remove('pois');
+  ohjeet.style.opacity = '1';
+}
+
+function suljeOhjeet() {
+  ohjeet.style.opacity = '0';
+  ohjeet.classList.add('pois');
+  document.body.classList.remove('ohjeet-auki');
+}
+
+el('ohjeEdellinen').addEventListener('click', () => naytaSivu(sivu - 1));
+el('ohjeSeuraava').addEventListener('click', () => naytaSivu(sivu + 1));
+addEventListener('keydown', e => {
+  if (!document.body.classList.contains('ohjeet-auki')) return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); naytaSivu(sivu - 1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); naytaSivu(sivu + 1); }
+});
+el('avaaOhjeet').addEventListener('click', e => { e.currentTarget.blur(); avaaOhjeet(); });
+el('suljeOhjeet').addEventListener('click', e => { e.currentTarget.blur(); suljeOhjeet(); });
 
 /* ---------- todistenäkymä ----------
    Näytetään vaalitiimille palkintoa lunastettaessa. Tiedot haetaan

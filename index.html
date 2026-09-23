@@ -303,6 +303,106 @@
   }
   /* pitkä nappiteksti mahtuu 360 px ruudulla yhdelle riville */
   .valikkonapit .btn-pitka{font-size:17px}
+
+  /* Ohjeet-leima etusivun oikeassa laidassa otsikon ja Liinan välissä,
+     kuin kauppojen alennustarra: sakarareunainen, vino ja keltainen. */
+  .leima{
+    position:absolute;
+    right:calc(10px + env(safe-area-inset-right));
+    top:calc(27% + env(safe-area-inset-top));
+    width:96px;height:96px;padding:0;border:0;background:none;
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+    transform:rotate(14deg);transition:transform .12s ease;
+    filter:drop-shadow(0 4px 0 rgba(9,18,38,.35)) drop-shadow(0 8px 14px rgba(9,18,38,.35));
+  }
+  .leima svg{position:absolute;inset:0;width:100%;height:100%}
+  /* leiman kärki ei pilkistä asetusten tai ohjeiden kortin reunan takaa */
+  body.ohjeet-auki .leima,body.asetukset-auki .leima{visibility:hidden}
+  .leima-tahti{fill:#ffd60a;stroke:#12305e;stroke-width:3;stroke-linejoin:round}
+  .leima-rengas{fill:none;stroke:#12305e;stroke-width:2;stroke-dasharray:4 3.5}
+  .leima-teksti{
+    position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    height:100%;font:800 15px/1 'Baloo 2',Nunito,sans-serif;color:#12305e;letter-spacing:.01em;
+  }
+  .leima-teksti small{font:900 9px/1 Nunito,sans-serif;letter-spacing:.14em;margin-bottom:2px}
+  .leima:active{transform:rotate(14deg) scale(.92)}
+  .leima:focus-visible{outline:3px solid #fff;outline-offset:2px;border-radius:50%}
+  @media (prefers-reduced-motion: no-preference){
+    .leima{animation:leimaHeilahdus 5s ease-in-out 1.2s infinite}
+    @keyframes leimaHeilahdus{
+      0%,86%,100%{transform:rotate(14deg)}
+      90%{transform:rotate(6deg) scale(1.06)}
+      94%{transform:rotate(18deg)}
+    }
+    .leima:active{animation:none}
+  }
+
+  /* Ohjeet: viisi korttia vierekkäin, yksi näkyvissä kerrallaan. Kuva
+     ylhäällä, teksti alla; eteenpäin nuolinapeilla tai pyyhkäisemällä. */
+  #ohjeet{pointer-events:auto;padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  #ohjeet.pois{pointer-events:none}
+  #ohjeet .title{font-size:38px}
+  .ohjekortti{max-height:100%;overflow-y:auto;overscroll-behavior:contain;gap:12px;padding:22px 16px 20px;width:min(360px,100%)}
+  .ohjerata{width:100%;overflow:hidden;touch-action:pan-y;flex:none}
+  .ohjeraita{display:flex;transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+  .ohjesivu{flex:0 0 100%;box-sizing:border-box;padding:0 3px;--ohjevari:#ffd60a}
+  .ohje-nocco{--ohjevari:#f2600c}
+  .ohje-ryde{--ohjevari:#76c043}
+  .ohje-palkinto{--ohjevari:#ef6317}
+  .ohjesivu-sisa{
+    height:100%;box-sizing:border-box;padding:14px 14px 16px;border-radius:16px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;
+    background:rgba(9,18,38,.4);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.12),inset 0 4px 0 var(--ohjevari);
+  }
+  .ohje-kuva{display:block;width:100%;max-width:260px;height:auto;aspect-ratio:2/1;margin-bottom:2px}
+  .ohje-3d{position:relative}
+  /* koroke ja pokaali tarvitsevat korkeamman rajauksen kuin muut kuvat */
+  #ohjePalkintoKuva,#ohjeRydeKuva{aspect-ratio:16/10;max-width:280px}
+  .ohje-3d canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .ohje-salama{position:absolute;left:12%;top:30%;width:26px;height:auto;z-index:1;filter:drop-shadow(0 0 6px rgba(242,96,12,.7))}
+  .ohje-salama.oikea{left:auto;right:12%;top:18%;transform:scaleX(-1)}
+  .ohje-sydan{position:absolute;left:4%;top:4%;width:42px;height:auto;z-index:1;filter:drop-shadow(0 3px 0 rgba(9,18,38,.35))}
+  @media (prefers-reduced-motion: no-preference){
+    .ohje-sydan{animation:sydanLyonti 1.6s ease-in-out infinite}
+    @keyframes sydanLyonti{0%,60%,100%{transform:scale(1)}70%{transform:scale(1.14)}80%{transform:scale(.98)}}
+    .ohje-salama{animation:salamaValahdys 1.9s ease-in-out infinite}
+    .ohje-salama.oikea{animation-delay:.95s}
+    @keyframes salamaValahdys{0%,100%{opacity:.55}45%{opacity:1}55%{opacity:.8}}
+  }
+  .ohjesivu h3{margin:0;font:800 19px/1 'Baloo 2',Nunito,sans-serif;letter-spacing:.02em;color:var(--ohjevari)}
+  .ohjesivu p{margin:0;font:600 13px/1.5 Nunito,sans-serif;color:rgba(255,255,255,.88)}
+  .ohjetaulukko{
+    display:grid;grid-template-columns:auto auto auto;gap:10px 16px;align-items:center;justify-content:center;
+    margin:6px 0 8px;font:600 13px/1.2 Nunito,sans-serif;color:rgba(255,255,255,.78);text-align:left;
+  }
+  .ohjetaulukko b{font:900 10px/1.1 Nunito,sans-serif;letter-spacing:.1em;color:#fff}
+  .ohjetaulukko b small{display:block;font:600 10px/1.2 Nunito,sans-serif;letter-spacing:0;color:rgba(255,255,255,.6)}
+  .ohjetaulukko span:nth-child(3n+2){font-weight:800;color:#fff}
+  .ohjenav{display:flex;align-items:center;justify-content:space-between;width:100%}
+  .nuolinappi{
+    -webkit-appearance:none;appearance:none;border:0;padding:0;cursor:pointer;
+    width:52px;height:48px;border-radius:14px;
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(180deg,#ffd60a,#f7b500);color:#12305e;
+    box-shadow:0 4px 0 #b97f00,inset 0 2px 0 rgba(255,255,255,.5);
+    transition:transform .08s ease,opacity .2s ease;
+  }
+  .nuolinappi:active{transform:translateY(2px);box-shadow:0 2px 0 #b97f00,inset 0 2px 0 rgba(255,255,255,.5)}
+  .nuolinappi:disabled{opacity:.3;cursor:default;transform:none}
+  .nuolinappi:focus-visible{outline:3px solid #fff;outline-offset:3px}
+  .ohjepisteet{display:flex;gap:6px}
+  .ohjepisteet button{
+    -webkit-appearance:none;appearance:none;border:0;padding:0;cursor:pointer;
+    width:10px;height:10px;border-radius:5px;background:rgba(255,255,255,.3);
+    transition:width .25s ease,background .25s ease;
+  }
+  .ohjepisteet button[aria-current="true"]{width:24px;background:#ffd60a}
+  .ohjepisteet button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  kbd{
+    display:inline-block;min-width:18px;box-sizing:border-box;padding:3px 5px;margin:0 1px;border-radius:6px;
+    background:rgba(255,255,255,.14);box-shadow:inset 0 -2px 0 rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,255,255,.2);
+    font:800 11px/1 Nunito,sans-serif;text-align:center;color:#fff;
+  }
   .tunniste{margin-top:4px;font:800 11px/1 Nunito,sans-serif;letter-spacing:.06em;color:#ef6317}
   .koti:focus-visible{outline:3px solid #ffd60a;outline-offset:3px}
   /* pelin HUD pois palautteen ajaksi */
@@ -405,6 +505,13 @@
         <circle cx="12" cy="12" r="6.6"/>
       </svg>
     </button>
+    <button class="leima" id="avaaOhjeet" type="button" aria-label="Ohjeet">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <polygon class="leima-tahti" points="50.0,1.0 57.3,8.6 66.8,4.0 71.0,13.6 81.5,12.5 82.2,23.0 92.4,25.5 89.5,35.6 98.3,41.5 92.0,50.0 98.3,58.5 89.5,64.4 92.4,74.5 82.2,77.0 81.5,87.5 71.0,86.4 66.8,96.0 57.3,91.4 50.0,99.0 42.7,91.4 33.2,96.0 29.0,86.4 18.5,87.5 17.8,77.0 7.6,74.5 10.5,64.4 1.7,58.5 8.0,50.0 1.7,41.5 10.5,35.6 7.6,25.5 17.8,23.0 18.5,12.5 29.0,13.6 33.2,4.0 42.7,8.6"/>
+        <circle class="leima-rengas" cx="50" cy="50" r="34"/>
+      </svg>
+      <span class="leima-teksti"><small>PELIN</small>OHJEET</span>
+    </button>
     <div class="etusivu-yla">
       <div class="kicker">LAHTI · KIRKKOKATU</div>
       <div class="title">LIINA<br>JUOKSEE</div>
@@ -486,6 +593,82 @@
         Näyttää nimimerkkisi ja ennätyksesi koko ruudulla. Näytä se vaalitiimille saadaksesi palkinnon.
       </p>
       <div class="tunniste">#orangeisthenewblack</div>
+    </div>
+  </div>
+  <div class="screen pois" id="ohjeet" style="opacity:0">
+    <div class="kortti ohjekortti" role="dialog" aria-labelledby="ohjeetOtsikko">
+      <div class="title" id="ohjeetOtsikko">OHJEET</div>
+      <div class="ohjerata" aria-roledescription="karuselli">
+        <div class="ohjeraita">
+          <section class="ohjesivu" aria-label="Ohje 1/5: liikkuminen"><div class="ohjesivu-sisa">
+            <h3>LIIKKUMINEN</h3>
+            <div class="ohjetaulukko">
+              <span></span><b>PUHELIN<small>pyyhkäise</small></b><b>TIETOKONE<small>näppäimet</small></b>
+              <span>kaista</span><span>← →</span><span><kbd>←</kbd><kbd>→</kbd> <kbd>A</kbd><kbd>D</kbd></span>
+              <span>hyppy</span><span>↑</span><span><kbd>↑</kbd><kbd>W</kbd><kbd>väli</kbd></span>
+              <span>kierähdys</span><span>↓</span><span><kbd>↓</kbd><kbd>S</kbd></span>
+              <span>potkulauta</span><span>nappi</span><span><kbd>R</kbd></span>
+              <span>aloitus</span><span>PELAA</span><span><kbd>väli</kbd><kbd>Enter</kbd></span>
+            </div>
+            <p>Väistä autot, sillä niiden yli ei pääse. Matalan puomin yli voi hypätä tai sen ali kierähtää, korkean ali pääsee vain kierähtämällä.</p>
+          </div></section>
+          <section class="ohjesivu ohje-nocco" aria-label="Ohje 2/5: NOCCO-tölkki"><div class="ohjesivu-sisa">
+            <div class="ohje-kuva ohje-3d" id="ohjeNoccoKuva" aria-hidden="true">
+              <svg class="ohje-salama" viewBox="0 0 30 46"><path d="M18 0L2 26h12L8 46 28 18H16l6-18z" fill="#f2600c"/></svg>
+              <svg class="ohje-salama oikea" viewBox="0 0 30 46"><path d="M18 0L2 26h12L8 46 28 18H16l6-18z" fill="#f2600c"/></svg>
+            </div>
+            <h3>NOCCO-TÖLKKI</h3>
+            <p>Nappaa tölkki, niin saat neljän sekunnin boostin: juokset puolitoista kertaa nopeammin, ja jokainen kolikko on tuplasti arvokas. Tölkki antaa myös 150 pistettä.</p>
+          </div></section>
+          <section class="ohjesivu ohje-ryde" aria-label="Ohje 3/5: Ryde-potkulauta"><div class="ohjesivu-sisa">
+            <div class="ohje-kuva ohje-3d" id="ohjeRydeKuva" aria-hidden="true">
+              <svg class="ohje-sydan" viewBox="0 0 44 38">
+                <path d="M22 38C8 28 0 20 0 11 0 4 5 0 11 0c5 0 9 3 11 7 2-4 6-7 11-7 6 0 11 4 11 11 0 9-8 17-22 27z" fill="#ef6317"/>
+                <text x="22" y="22" text-anchor="middle" font-family="'Baloo 2',Nunito,sans-serif" font-weight="800" font-size="15" fill="#fff">+1</text>
+              </svg>
+            </div>
+            <h3>RYDE-POTKULAUTA</h3>
+            <p>Kerää potkulauta kaistalta talteen. Kun haluat kyytiin, napauta puhelimella oikean alakulman potkulautanappia tai paina tietokoneella <kbd>R</kbd>. Kyyti kestää kymmenen sekuntia, ja sen ajan lauta on lisäelämä: jos törmäät, menetät laudan, mutta juoksu jatkuu. Napin kehä näyttää, paljonko kyytiä on jäljellä.</p>
+          </div></section>
+          <section class="ohjesivu ohje-kolikot" aria-label="Ohje 4/5: kolikot"><div class="ohjesivu-sisa">
+            <svg class="ohje-kuva" viewBox="0 0 240 120" aria-hidden="true">
+              <g fill="#ffd60a" stroke="#b97f00" stroke-width="3">
+                <ellipse cx="62" cy="104" rx="26" ry="8"/><ellipse cx="62" cy="94" rx="26" ry="8"/>
+                <ellipse cx="62" cy="84" rx="26" ry="8"/><ellipse cx="62" cy="74" rx="26" ry="8"/>
+                <circle cx="102" cy="46" r="22"/>
+              </g>
+              <circle cx="102" cy="46" r="14" fill="none" stroke="#b97f00" stroke-width="2.5"/>
+              <path d="M102 37l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2-4.5-4.4 6.2-.9z" fill="#b97f00"/>
+              <path d="M134 62h16m-6-6l6 6-6 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".75"/>
+              <path d="M166 116c0-24 8-40 24-40s24 16 24 40z" fill="#fff"/>
+              <path d="M186 78h8l-1 22-3 5-3-5z" fill="#ef6317"/>
+              <circle cx="190" cy="50" r="18" fill="#f2c9a0"/>
+              <path d="M172 48c0-14 8-20 18-20s18 6 18 20c-4-7-10-10-18-10s-14 3-18 10z" fill="#5b3a26"/>
+              <g fill="none" stroke="#12305e" stroke-width="2.5"><circle cx="183" cy="52" r="5.5"/><circle cx="197" cy="52" r="5.5"/><path d="M188.5 52h3"/></g>
+              <path d="M184 62q6 4 12 0" stroke="#12305e" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            </svg>
+            <h3>KOLIKOT</h3>
+            <p>Kerää kolikoita juostessasi. Niillä voit ostaa Liinan perään uusia jahtaajia: eri opettajia ja muita henkilökunnan jäseniä.</p>
+          </div></section>
+          <section class="ohjesivu ohje-palkinto" aria-label="Ohje 5/5: palkinnot"><div class="ohjesivu-sisa">
+            <div class="ohje-kuva ohje-3d" id="ohjePalkintoKuva" aria-hidden="true"></div>
+            <h3>PALKINNOT</h3>
+            <p>Vaaliviikon päätteeksi tulostaulun kolme parhaiten sijoittunutta palkitaan.</p>
+          </div></section>
+        </div>
+      </div>
+      <div class="ohjenav">
+        <button class="nuolinappi" id="ohjeEdellinen" type="button" aria-label="Edellinen ohje">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <div class="ohjepisteet" id="ohjePisteet"></div>
+        <button class="nuolinappi" id="ohjeSeuraava" type="button" aria-label="Seuraava ohje">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+      <div class="valikkonapit">
+        <button class="btn btn-pitka" id="suljeOhjeet" type="button">TAKAISIN PÄÄVALIKKOON</button>
+      </div>
     </div>
   </div>
   <div class="todiste pois" id="todiste" role="dialog" aria-label="Nimimerkki ja ennätys">

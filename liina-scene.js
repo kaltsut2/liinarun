@@ -1137,6 +1137,208 @@ for (let i = 0; i < 3; i++) {
   scoots.push(tilt);
 }
 
+/* Ohjeiden 3D-kuvat (NOCCO-tölkki ja Ryde-potkulauta): pelin omat mallit
+   pienellä omalla piirtäjällä. Kortteja näkyy yksi kerrallaan, joten yksi
+   piirtäjä riittää: sen kangas siirretään näkyvän kortin kuvapaikkaan.
+   Piirtäjä luodaan vasta, kun ohjeet avataan ensimmäisen kerran. */
+const ohjeKuvat = (() => {
+  const liikkuu = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const koko = new THREE.Vector2();
+  let r = null, t = 0;
+
+  function valot(maisema) {
+    maisema.add(new THREE.HemisphereLight(0xd8ecf5, 0x9c7d59, 1.05));
+    const valo = new THREE.DirectionalLight(0xfff2d0, 1.5);
+    valo.position.set(3, 5, 4);
+    maisema.add(valo);
+  }
+  /* Pehmeä hehku: pallon takapinta, joka kirkastuu keskeltä ja häipyy
+     reunoille. Etuosa jää mallin taakse, joten hehku näkyy sen ympärillä. */
+  function hehku(vari, voima) {
+    return new THREE.ShaderMaterial({
+      uniforms: { vari: { value: new THREE.Color(vari) }, voima: { value: voima } },
+      vertexShader: `varying vec3 vN; varying vec3 vV;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `uniform vec3 vari; uniform float voima; varying vec3 vN; varying vec3 vV;
+        void main() {
+          float f = abs(dot(normalize(vN), normalize(vV)));
+          gl_FragColor = vec4(vari, pow(f, 3.0) * voima);
+        }`,
+      side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+    });
+  }
+  function varjo(sx, sz) {
+    const v = new THREE.Mesh(new THREE.CircleGeometry(1, 32),
+      new THREE.MeshBasicMaterial({ color: 0x091226, transparent: true, opacity: 0.32, depthWrite: false }));
+    v.rotation.x = -Math.PI / 2;
+    v.scale.set(sx, sz, 1);
+    return v;
+  }
+
+  /* Ryde: kolmen neljäsosan kulma, kevyt kallistus, heilahtelee hitaasti */
+  function ryde() {
+    const maisema = new THREE.Scene(); valot(maisema);
+    const kamera = new THREE.PerspectiveCamera(30, 2, 0.1, 50);
+    kamera.position.set(0, 1.7, 5.0); kamera.lookAt(0, 0.92, 0);
+    const kaanto = new THREE.Group(), kallistus = new THREE.Group();
+    kallistus.rotation.z = -0.16;
+    kallistus.add(makeScooter());
+    kaanto.add(kallistus);
+    const rengas = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.035, 8, 48),
+      new THREE.MeshBasicMaterial({ color: 0x76c043 }));
+    rengas.rotation.x = Math.PI / 2;
+    maisema.add(varjo(1.35, 0.55), rengas, kaanto);
+    return { maisema, kamera, liiku(t) {
+      kaanto.rotation.y = Math.PI / 2 - 0.55 + Math.sin(t * 0.9) * 0.5;
+      kaanto.position.y = 0.08 + Math.sin(t * 2.4) * 0.05;
+      rengas.scale.setScalar(1 + Math.sin(t * 2.4) * 0.04);
+    } };
+  }
+
+  /* NOCCO: iso tölkki keinuu ja kiertyy hitaasti, oranssi hehku sykkii */
+  function nocco() {
+    const maisema = new THREE.Scene(); valot(maisema);
+    const kamera = new THREE.PerspectiveCamera(30, 2, 0.1, 50);
+    kamera.position.set(0, 0.35, 4.3); kamera.lookAt(0, 0.08, 0);
+    const keinu = new THREE.Group();
+    const tolkki = makeCan();
+    tolkki.scale.setScalar(2.45);
+    keinu.add(tolkki);
+    const hohtoAine = hehku(0xf2600c, 1.1);
+    const hohto = new THREE.Mesh(new THREE.SphereGeometry(1.05, 32, 20), hohtoAine);
+    hohto.scale.set(0.9, 1.15, 0.9);
+    const rengas = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.035, 8, 48),
+      new THREE.MeshBasicMaterial({ color: 0xf2600c }));
+    rengas.rotation.x = Math.PI / 2 - 0.28;
+    /* oranssit reunavalot kummaltakin puolelta */
+    const vasen = new THREE.PointLight(0xf2600c, 3, 5, 1.4); vasen.position.set(-1.3, 0.3, 0.2);
+    const oikea = new THREE.PointLight(0xff8a3c, 2, 5, 1.4); oikea.position.set(1.3, -0.1, 0.2);
+    const alla = varjo(0.75, 0.3);
+    alla.position.y = -1.0;
+    maisema.add(hohto, alla, rengas, vasen, oikea, keinu);
+    return { maisema, kamera, liiku(t) {
+      keinu.rotation.z = Math.sin(t * 1.7) * 0.2;
+      keinu.rotation.x = Math.sin(t * 1.1) * 0.07;
+      tolkki.rotation.y = -0.4 + Math.sin(t * 0.6) * 0.9;
+      keinu.position.y = Math.sin(t * 2.2) * 0.05;
+      const syke = 0.5 + 0.5 * Math.sin(t * 3.2);
+      hohtoAine.uniforms.voima.value = 0.75 + syke * 0.6;
+      vasen.intensity = 2 + syke * 2.5;
+      rengas.rotation.z = t * 0.9;
+      rengas.position.y = keinu.position.y;
+      rengas.scale.setScalar(1 + syke * 0.05);
+    } };
+  }
+
+  /* Palkinnot: kolmiportainen koroke, jonka ykköspallilla hohtava pokaali */
+  function palkinto() {
+    const maisema = new THREE.Scene(); valot(maisema);
+    const kamera = new THREE.PerspectiveCamera(30, 2, 0.1, 50);
+    kamera.position.set(0, 2.08, 5.75); kamera.lookAt(0, 1.08, 0);
+    const kaanto = new THREE.Group();
+    const numero = n => canvasTex(128, 128, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      g.fillStyle = '#12305e';
+      g.font = "800 104px 'Baloo 2', Nunito, sans-serif";
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(n), w / 2, h / 2 + 8);
+    });
+    for (const [n, x, k, vari] of [[1, 0, 1.3, 0xffd60a], [2, -1.16, 0.88, 0xc8d1db], [3, 1.16, 0.6, 0xd08a4f]]) {
+      const palli = new THREE.Mesh(new THREE.BoxGeometry(1.12, k, 0.95), toon(vari));
+      palli.position.set(x, k / 2, 0);
+      const reuna = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.07, 1.01), toon(new THREE.Color(vari).multiplyScalar(0.78)));
+      reuna.position.set(x, k - 0.035, 0);
+      const luku = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.62),
+        new THREE.MeshBasicMaterial({ map: numero(n), transparent: true }));
+      luku.position.set(x, Math.min(k * 0.5, k - 0.4), 0.478);
+      kaanto.add(palli, reuna, luku);
+    }
+
+    /* pokaali: jalusta, varsi, sorvattu malja ja kahvat */
+    const kulta = toon(0xffd60a, { emissive: 0x7a5200, emissiveIntensity: 0.5 });
+    const pokaali = new THREE.Group();
+    const jalusta = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.1, 0.36), toon(0xb97f00));
+    jalusta.position.y = 0.05;
+    const varsi = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.07, 0.2, 14), kulta);
+    varsi.position.y = 0.2;
+    const malja = new THREE.Mesh(new THREE.LatheGeometry([
+      new THREE.Vector2(0.001, 0), new THREE.Vector2(0.09, 0.02), new THREE.Vector2(0.19, 0.1),
+      new THREE.Vector2(0.25, 0.26), new THREE.Vector2(0.27, 0.42), new THREE.Vector2(0.25, 0.44)
+    ], 28), kulta);
+    malja.position.y = 0.29;
+    for (const sx of [-1, 1]) {
+      const kahva = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.026, 8, 16, Math.PI), kulta);
+      kahva.rotation.z = sx * -Math.PI / 2;
+      kahva.position.set(sx * 0.26, 0.6, 0);
+      pokaali.add(kahva);
+    }
+    pokaali.add(jalusta, varsi, malja);
+    pokaali.scale.setScalar(1.25);
+    pokaali.position.y = 1.3;
+    kaanto.add(pokaali);
+
+    const hohtoAine = hehku(0xffc21a, 1.2);
+    const hohto = new THREE.Mesh(new THREE.SphereGeometry(0.72, 32, 20), hohtoAine);
+    hohto.position.y = 1.3 + 0.5;
+    const kultavalo = new THREE.PointLight(0xffd23a, 6, 4, 1.4);
+    kultavalo.position.set(0, 2.1, 0.9);
+
+    /* tähtikipinät kiertävät pokaalia */
+    const kipinat = [];
+    for (let i = 0; i < 6; i++) {
+      const k = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      k.userData.vaihe = i / 6 * Math.PI * 2;
+      kipinat.push(k); maisema.add(k);
+    }
+    maisema.add(varjo(2.0, 0.75), hohto, kultavalo, kaanto);
+    return { maisema, kamera, liiku(t) {
+      kaanto.rotation.y = Math.sin(t * 0.7) * 0.38;
+      pokaali.rotation.y = t * 0.9;
+      pokaali.position.y = 1.3 + Math.sin(t * 2.0) * 0.03;
+      const syke = 0.5 + 0.5 * Math.sin(t * 3.0);
+      hohtoAine.uniforms.voima.value = 0.7 + syke * 0.9;
+      hohto.scale.setScalar(1 + syke * 0.12);
+      kulta.emissiveIntensity = 0.35 + syke * 0.55;
+      kultavalo.intensity = 4 + syke * 5;
+      for (const k of kipinat) {
+        const a = k.userData.vaihe + t * 1.3;
+        k.position.set(Math.cos(a) * 0.72, 1.85 + Math.sin(a * 2 + t) * 0.22, Math.sin(a) * 0.72);
+        k.scale.setScalar(0.6 + 0.6 * Math.abs(Math.sin(t * 3 + k.userData.vaihe * 2)));
+        k.rotation.y = t * 2;
+      }
+    } };
+  }
+
+  const rakentajat = { ohjeNoccoKuva: nocco, ohjeRydeKuva: ryde, ohjePalkintoKuva: palkinto };
+  const valmiit = {};
+
+  return {
+    piirra(dt) {
+      if (!document.body.classList.contains('ohjeet-auki')) return;
+      const paikka = document.querySelector('.ohjesivu:not([inert]) .ohje-3d');
+      if (!paikka || !rakentajat[paikka.id]) return;
+      if (!r) {
+        r = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        r.setPixelRatio(Math.min(devicePixelRatio, 2));
+      }
+      if (r.domElement.parentNode !== paikka) paikka.prepend(r.domElement);
+      const k = valmiit[paikka.id] || (valmiit[paikka.id] = rakentajat[paikka.id]());
+      const w = paikka.clientWidth, h = paikka.clientHeight;
+      if (!w || !h) return;
+      r.getSize(koko);
+      if (koko.x !== w || koko.y !== h) r.setSize(w, h, false);
+      if (k.kamera.aspect !== w / h) { k.kamera.aspect = w / h; k.kamera.updateProjectionMatrix(); }
+      if (liikkuu) t += dt;
+      k.liiku(t);
+      r.render(k.maisema, k.kamera);
+    }
+  };
+})();
+
 /* ---------- tietyöpuomi ----------
    Kaistan sulkeva punavalkoinen puomi kahden A-pukin päällä. Sen yli ei
    pääse hyppäämällä (hyppy nousee 1,63 m, puomi alkaa 1,45 m:stä ja
@@ -1373,6 +1575,7 @@ function start() {
   if (document.body.classList.contains('tunnistamaton')) return;
   if (document.body.classList.contains('taulu-auki')) return;
   if (document.body.classList.contains('asetukset-auki')) return;
+  if (document.body.classList.contains('ohjeet-auki')) return;
   cars.forEach((c, i) => { if (c.position.z > -60) { c.userData.lane = startLanes[i]; c.position.set(startLanes[i] * LANE_W, 0, -80 - i * 32); } });
   puomit.forEach((p, i) => sijoitaPuomi(p, -140 - i * 110));
   /* Liina liukuu etusivun paikaltaan keskikaistalle eikä hyppää */
@@ -1445,6 +1648,7 @@ addEventListener('keydown', e => {
   else if (e.key === 'ArrowDown' || e.key === 's') { e.preventDefault(); roll(); }
   else if (e.key === 'ArrowUp' || e.key === ' ' || e.key === 'w') { e.preventDefault(); if (!S.started) start(); else if (S.over) reset(); else jump(); }
   else if (e.key === 'Enter') { if (!S.started) start(); else if (S.over) reset(); }
+  else if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) kaytaScootti();
 });
 
 /* Potkulaudan aktivointi: kuluttaa yhden varastosta ja antaa 10 sekunnin kyydin. */
@@ -1759,6 +1963,7 @@ function tick() {
   }
 
   renderer.render(scene, camera);
+  ohjeKuvat.piirra(dt);
   requestAnimationFrame(tick);
 }
 scene.add(sun.target);
