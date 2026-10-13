@@ -226,6 +226,25 @@ function naytaLoppu(tulos, ennatys) {
   el('overLuku').textContent = fi(tulos.matka);
 }
 
+/* "Ohitit 3 etappia · TOP 10:een puuttui 84 m (Sarra95)" */
+function etappiRivi(e) {
+  if (!e) return '';
+  const osat = [];
+  if (e.ohitettu > 0) osat.push(`Ohitit ${e.ohitettu} ${e.ohitettu === 1 ? 'etapin' : 'etappia'}`);
+  if (e.seuraava) {
+    const s = e.seuraava;
+    const kohde = s.oma ? 'Omaan ennätykseen'
+      : s.sija === 1 ? 'Kärkeen'
+      : s.sija <= 10 ? `TOP ${s.sija}:een`
+      : `Sijalle ${s.sija}`;
+    const kuka = s.nimi ? ` (${s.nimi.replace(/[&<>"]/g, '')})` : '';
+    osat.push(`${kohde} puuttui <b>${fi(s.puuttuu)}\u00a0m</b>${kuka}`);
+  } else if (e.ohitettu > 0) {
+    osat.push('Ohitit kaikki etapit!');
+  }
+  return osat.join(' · ');
+}
+
 function tilaRivi(v) {
   if (v.uusi_ennatys) {
     return v.edellinen > 0 ? `Sija ${v.sija} · aiempi ennätys ${fi(v.edellinen)} m` : `Sija ${v.sija}`;
@@ -290,6 +309,7 @@ document.addEventListener('liina:loppu', async e => {
   const arvio = tulos.matka > pelaaja.paras;
   naytaLoppu(tulos, arvio);
   el('overKolikot').textContent = tulos.kolikot > 0 ? `+${fi(tulos.kolikot)} kolikkoa tilille` : '';
+  el('overEtappi').innerHTML = etappiRivi(tulos.etapit);
   el('overTila').textContent = 'Tallennetaan tulosta…';
   kirjaaPaikallisesti(tulos);
 
@@ -716,3 +736,53 @@ function suljeTodiste() {
 el('avaaTodiste').addEventListener('click', e => { e.currentTarget.blur(); avaaTodiste(); });
 el('suljeTodiste').addEventListener('click', e => { e.currentTarget.blur(); suljeTodiste(); });
 addEventListener('resize', () => { if (!todiste.classList.contains('pois')) sovitaNimi(); });
+
+
+/* ---------------------------------------------------------------
+   Vaaliviikon lähtölaskuri
+
+   Laskee aina kuluvan viikon perjantaihin klo 18 Suomen aikaa
+   (Europe/Helsinki laitteen aikavyöhykkeestä riippumatta). Perjantain
+   klo 18 jälkeen viikonlopun ajan laskurissa lukee, että viikko on
+   päättynyt; maanantaina laskenta alkaa uudelleen. Kellonsiirto osuu
+   aina sunnuntaille, joten maanantain ja perjantain välillä erotus
+   voidaan laskea suoraan Suomen seinäkellosta.
+   --------------------------------------------------------------- */
+
+const HELSINKI = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Helsinki', weekday: 'short', year: 'numeric', month: '2-digit',
+  day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+});
+const VIIKONPAIVA = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+
+function vaaliviikko(nyt = new Date()) {
+  const o = Object.fromEntries(HELSINKI.formatToParts(nyt).map(p => [p.type, p.value]));
+  const pv = VIIKONPAIVA[o.weekday];
+  /* Suomen seinäkello millisekunteina, ikään kuin UTC:nä */
+  const seina = Date.UTC(+o.year, +o.month - 1, +o.day, +o.hour, +o.minute, +o.second);
+  const perjantai18 = Date.UTC(+o.year, +o.month - 1, +o.day + (5 - pv), 18, 0, 0);
+  const jaljella = perjantai18 - seina;
+  return { jaljella, paattynyt: jaljella <= 0 };
+}
+
+function muotoileJaljella(ms) {
+  const s = Math.floor(ms / 1000);
+  const pv = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), min = Math.floor(s % 3600 / 60), sek = s % 60;
+  if (pv > 0) return `${pv} pv ${h} h ${min} min`;
+  if (h > 0) return `${h} h ${min} min ${sek} s`;
+  return `${min} min ${sek} s`;
+}
+
+function paivitaVaalilaskurit() {
+  const v = vaaliviikko();
+  for (const el of document.querySelectorAll('.vaalilaskuri')) {
+    el.classList.toggle('paattynyt', v.paattynyt);
+    el.querySelector('[data-vaali-otsikko]').textContent = v.paattynyt
+      ? 'VAALIVIIKKO PÄÄTTYI'
+      : (el.classList.contains('ohjelaskuri') ? 'AIKAA JÄLJELLÄ' : 'VAALIVIIKKO PÄÄTTYY');
+    el.querySelector('[data-vaali-aika]').textContent = v.paattynyt ? 'Palkinnot jaetaan' : muotoileJaljella(v.jaljella);
+  }
+}
+paivitaVaalilaskurit();
+setInterval(paivitaVaalilaskurit, 1000);
+

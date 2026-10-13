@@ -104,11 +104,14 @@ insert into public.jahtaajat (id, nimi, hinta, jarjestys, saatavilla) values
   ('tervis',     'Tervis',        0, 1, true),
   ('queen_mari', 'Queen Mari',  300, 2, true),
   ('sarra',      'Sarra',       600, 3, true),
-  ('tyhja',      'Tulossa',     900, 4, false),
+  ('keittaja_sami', 'Keittäjä-Sami', 900, 4, true),
   ('nina',       'Nina',       1200, 5, true)
 on conflict (id) do update
   set nimi = excluded.nimi, hinta = excluded.hinta,
       jarjestys = excluded.jarjestys, saatavilla = excluded.saatavilla;
+-- Neljäs paikka oli 'tyhja' (Tulossa), kunnes Keittäjä-Sami valmistui.
+-- Sitä ei voinut ostaa eikä valita, joten siihen ei viittaa mikään.
+delete from public.jahtaajat where id = 'tyhja';
 
 -- Pelaajan tili: kolikot, varastossa olevat potkulaudat (enintään 5) ja
 -- valittu jahtaaja. Lisätään sarakkeina, jotta vanhat pelaajat säilyvät.

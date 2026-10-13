@@ -47,7 +47,9 @@ jahtaa takaa. Vastaan tulee autoja ja AGT-bussi.
 ## Numerot, joita ei muuteta ilman syytä
 
 - Kamera: fov 72, chase `(laneX·0.3, 4.2 + y·0.25, 9.8)`, katse `(laneX·0.18, 1.4 + y·0.45, −12)`.
-- Vauhti 16 → 31 m/s, ramppi 0.4/s. Hyppy vy 9.2, painovoima 26.
+- Vauhti 20 → 31 m/s, ramppi 0.9/s (lokakuu 2026, Kallen pyynnöstä vaikeampi). Kaikki vaikeusluvut
+  ovat `VAIKEUS`-oliossa liina-scene.js:ssä. Huippuvauhtia ei nosteta yli 31:n muuttamatta
+  palvelimen nopeusrajaa (supabase.sql, matka ≤ kesto × 40 + 10). Hyppy vy 11.6, painovoima 32.
 - Tervis: gap 12.5 → 10.6 m (kameran takana ajon aikana), game overissa z 3.4.
 - Boosteri: NOCCO-tölkki, 4 s, ×1.5 vauhti, ×2 kolikot. Tölkki kallellaan 0.52 rad, pyörii 5.2 rad/s.
 - Matka maaliin 900 m.
