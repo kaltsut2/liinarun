@@ -1,6 +1,10 @@
 -- ===============================================================
 --  Liina juoksee Mascotiin — tulostaulun tietokanta
 --
+--  Ääkköset ovat SQL:n sisällä merkkikoodeina (U&'\00e4', regexissä
+--  \u00e4), jotta leikepöydän merkistö ei voi rikkoa niitä. Kommenteissa
+--  ne saavat olla tavallisina.
+--
 --  Aja tämä tiedosto kokonaisuudessaan Supabasen SQL Editorissa
 --  (liitä → Run). Tiedosto on ajettavissa uudelleen: se ei tuhoa
 --  olemassa olevia pelaajia eikä tuloksia.
@@ -83,8 +87,8 @@ create table if not exists public.kielletyt_sanat (
   sana  text primary key
 );
 insert into public.kielletyt_sanat (sana) values
-  ('vittu'), ('vitu'), ('perkele'), ('paska'), ('huora'), ('kyrpa'), ('kyrpä'),
-  ('pillu'), ('mulkku'), ('runkk'), ('kusipaa'), ('kusipää'), ('homo'),
+  ('vittu'), ('vitu'), ('perkele'), ('paska'), ('huora'), ('kyrpa'), (U&'kyrp\00e4'),
+  ('pillu'), ('mulkku'), ('runkk'), ('kusipaa'), (U&'kusip\00e4\00e4'), ('homo'),
   ('neekeri'), ('nekru'), ('natsi'), ('hitler'), ('fuck'), ('shit'),
   ('cunt'), ('nigg'), ('bitch'), ('whore'), ('penis'), ('pussy')
 on conflict do nothing;
@@ -104,7 +108,7 @@ insert into public.jahtaajat (id, nimi, hinta, jarjestys, saatavilla) values
   ('tervis',     'Tervis',        0, 1, true),
   ('queen_mari', 'Queen Mari',  300, 2, true),
   ('sarra',      'Sarra',       600, 3, true),
-  ('keittaja_sami', 'Keittäjä-Sami', 900, 4, true),
+  ('keittaja_sami', U&'Keitt\00e4j\00e4-Sami', 900, 4, true),
   ('nina',       'Nina',       1200, 5, true)
 on conflict (id) do update
   set nimi = excluded.nimi, hinta = excluded.hinta,
@@ -221,14 +225,14 @@ declare
   v_nimi       text := regexp_replace(btrim(coalesce(p_nimi, '')), '\s+', ' ', 'g');
   v_puristettu text;
 begin
-  if v_nimi !~ '^[A-Za-zÅÄÖåäöÉéÜü0-9_. -]{3,16}$'
-     or v_nimi !~ '[A-Za-zÅÄÖåäöÉéÜü0-9]' then
+  if v_nimi !~ '^[A-Za-z\u00c5\u00c4\u00d6\u00e5\u00e4\u00f6\u00c9\u00e9\u00dc\u00fc0-9_. -]{3,16}$'
+     or v_nimi !~ '[A-Za-z\u00c5\u00c4\u00d6\u00e5\u00e4\u00f6\u00c9\u00e9\u00dc\u00fc0-9]' then
     raise exception 'NIMI_MUOTO';
   end if;
 
   v_puristettu := regexp_replace(
     translate(lower(v_nimi), '013457', 'oieast'),
-    '[^a-zåäöéü]', '', 'g');
+    '[^a-z\u00e5\u00e4\u00f6\u00e9\u00fc]', '', 'g');
 
   if exists (select 1 from public.kielletyt_sanat k
               where position(k.sana in v_puristettu) > 0) then
@@ -731,7 +735,7 @@ begin
   select id into v_pelaaja from public.pelaajat
    where nimi_avain = public._nimi_avain(p_nimimerkki);
   if v_pelaaja is null then
-    raise exception 'Nimimerkkiä % ei löydy', p_nimimerkki;
+    raise exception 'Nimimerkkia % ei loydy', p_nimimerkki;
   end if;
   update public.pelaaja_pin
      set pin_tiiviste = extensions.crypt(p_uusi_pin, extensions.gen_salt('bf', 8)),
