@@ -16,7 +16,7 @@
    välimuisti poistetaan uuden asentuessa.
    --------------------------------------------------------------- */
 
-const VERSIO = 'liinarun-v1';
+const VERSIO = 'liinarun-v2';
 
 const PYSYVA = [
   /\.glb(\?|$)/,
@@ -44,10 +44,16 @@ async function valimuistista(pyynto) {
   return vastaus;
 }
 
+/* Pelin oma koodi ja sivu: palvelimelta aina tarkistaen (no-cache), ei
+   selaimen HTTP-välimuistista. Muuten julkaisun jälkeen uusi sivu voi saada
+   vanhan skriptin, jolloin esim. uudet napit eivät toimi. Muuttumaton
+   tiedosto ei siirry uudelleen, vaan palvelin vastaa 304. */
 async function verkostaEnsin(pyynto) {
   const muisti = await caches.open(VERSIO);
   try {
-    const vastaus = await fetch(pyynto);
+    /* sivunavigoinnin pyyntöä ei voi kopioida uusilla asetuksilla, joten
+       sivu haetaan osoitteella */
+    const vastaus = await fetch(pyynto.mode === 'navigate' ? pyynto.url : pyynto, { cache: 'no-cache' });
     if (vastaus.ok) muisti.put(pyynto, vastaus.clone());
     return vastaus;
   } catch (virhe) {
