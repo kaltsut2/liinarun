@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------------
-   Liina juoksee Mascotiin – välimuisti (service worker)
+   Liinarun – välimuisti (service worker)
 
    Raskaat ja muuttumattomat tiedostot haetaan välimuistista, jolloin
    peli aukeaa toisella kerralla heti ja säästää puhelimen dataa:

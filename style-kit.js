@@ -1,5 +1,5 @@
 /**
- * style-kit.js — Liina juoksee Mascotiin
+ * style-kit.js — Liinarun
  * Kaikki tyylin kantavat rakenteet yhdessä paikassa. Uusi sisältö EI määrittele
  * omia materiaaleja, tekstuurifunktioita tai mittoja: se tuo ne täältä.
  *

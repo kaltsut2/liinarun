@@ -1,4 +1,4 @@
-# Liina juoksee Mascotiin
+# Liinarun
 
 Kolmen kaistan endless runner Lahden Kirkkokadulla. Liina juoksee Museon edestä
 kohti Mascotin ovea, ja yhteiskuntaopin ja historian lehtori Tervis jahtaa takaa.

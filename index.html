@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>Liina juoksee Mascotiin</title>
-<meta name="description" content="Kolmen kaistan endless runner Lahden Kirkkokadulla. Liina juoksee Museon edestä Mascotin ovelle, lehtori Tervis perässä.">
+<title>Liinarun</title>
+<meta name="description" content="Liinarun: kolmen kaistan endless runner. Liina juoksee kohti Mascottia, lehtori Tervis perässä.">
 <meta name="theme-color" content="#7cc4e4">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Liina juoksee">
+<meta name="apple-mobile-web-app-title" content="Liinarun">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <!-- Ikonit: tiedostonimessä on versio, koska Safari tunnistaa ikonin
      osoitteesta eikä sisällöstä. Uusi ikoni = uusi nimi (v2 jne.). -->
@@ -245,6 +245,27 @@
   body.tunnistamaton #scoot,body.taulu-auki #scoot{opacity:0;pointer-events:none}
   #nimi.odottaa{justify-content:center;padding-top:0}
   #nimi .title{font-size:38px}
+  /* Tervetulonäkymä ennen kirjautumista: sisältö keskellä, alareunassa tunniste.
+     Samassa ruudussa lomake ja otsikko piilotetaan ja päinvastoin. */
+  #nimi.tervetulo #nimiOtsikko,#nimi.tervetulo #nimiOhje,#nimi.tervetulo #nimiLomake,#nimi.tervetulo #nimiOdota{display:none}
+  #nimi:not(.tervetulo) #nimiTervetulo{display:none}
+  /* Kolme ryhmää koko korkeudelle: otsikko ylhäällä, kisan kuvaus keskellä
+     ja napit alhaalla peukalon ulottuvilla. */
+  #nimiTervetulo{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+    gap:20px;width:min(300px,100%);padding:4vh 0 2vh;box-sizing:border-box}
+  .tervetulo-keski{display:flex;flex-direction:column;align-items:center;gap:16px}
+  #nimiTervetulo .title{font-size:50px}
+  #nimiTervetulo .vaalilaskuri{white-space:nowrap}
+  @media (max-width:359px){
+    #nimiTervetulo .title{font-size:42px}
+    #nimiTervetulo .vaalilaskuri span{font-size:9px;letter-spacing:.04em}
+    #nimiTervetulo .vaalilaskuri b{font-size:14px}
+  }
+  .tervetulo-teksti{margin:0;font:600 13px/1.45 Nunito,sans-serif;color:rgba(255,255,255,.88);max-width:280px}
+  .tervetulo-teksti b{display:block;margin-bottom:5px;font:800 16px/1.25 'Baloo 2',Nunito,sans-serif;color:#ffd60a}
+  #nimiTervetulo .tervetulo-napit{width:min(240px,100%);gap:12px}
+  #nimiTervetulo .tervetulo-napit .btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:11px;padding-bottom:10px;font-size:19px;border-radius:18px}
+  .tervetulo-napit .btn small{font:800 10px/1 Nunito,sans-serif;letter-spacing:.04em;opacity:.8}
   #nimiLomake{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(300px,100%)}
   #nimiLomake[hidden],#nimiOdota[hidden]{display:none}
   #nimiLomake label{display:flex;flex-direction:column;gap:5px;width:100%}
@@ -300,6 +321,8 @@
   .etusivu-yla,.etusivu-ala{display:flex;flex-direction:column;align-items:center;gap:10px}
   /* ilman tummennusta pieni teksti tarvitsee oman varjonsa näkyäkseen */
   #intro .hint,#intro .kicker{text-shadow:0 1px 3px rgba(9,18,38,.75)}
+  /* yksirivinen LIINARUN ei saa osua asetusrattaaseen kapeimmillakaan puhelimilla */
+  @media (max-width:359px){ #intro .title{font-size:44px} }
   /* pelin lukemat pois etusivulta */
   body.valikossa .hud,body.valikossa #scoot{opacity:0;pointer-events:none}
   button.btn{border:0;font-family:inherit;cursor:pointer;-webkit-appearance:none;appearance:none}
@@ -678,8 +701,7 @@
 </head>
 <body class="valikossa">
 <div class="lataus" id="lataus" role="status" aria-live="polite">
-  <div class="kicker">LAHTI · KIRKKOKATU</div>
-  <div class="title">LIINA<br>JUOKSEE</div>
+  <div class="title">LIINARUN</div>
   <div class="lataus-palkki"><div id="latausTaytto"></div></div>
   <div class="hint" id="latausTeksti">Ladataan…</div>
 </div>
@@ -737,9 +759,8 @@
       Kauppa
     </button>
     <div class="etusivu-yla">
-      <div class="kicker">LAHTI · KIRKKOKATU</div>
-      <div class="title">LIINA<br>JUOKSEE</div>
-      <div class="hint">Museon edestä Mascotin ovelle</div>
+      <div class="title">LIINARUN</div>
+      <div class="hint">Liina juoksee kohti Mascottia</div>
     </div>
     <div class="etusivu-ala">
       <div class="pill" id="kuka" hidden>
@@ -760,8 +781,19 @@
     <div class="hint" id="tauluTila"></div>
     <button class="btn" id="suljeTaulu" type="button">TAKAISIN</button>
   </div>
-  <div class="screen" id="nimi">
-    <div class="kicker">LAHTI · KIRKKOKATU</div>
+  <div class="screen tervetulo" id="nimi">
+    <div id="nimiTervetulo">
+      <div class="title">LIINARUN</div>
+      <div class="tervetulo-keski">
+      <p class="tervetulo-teksti">Juokse Liinana kohti Mascottia ja <b>kilpaile vaaliviikon ajan huippupalkinnoista!</b>
+        Tulostaulun kolme parasta palkitaan, kun vaaliviikko päättyy perjantaina klo 18.</p>
+      <div class="vaalilaskuri pill" aria-live="off"><span data-vaali-otsikko>VAALIVIIKKO PÄÄTTYY</span><b data-vaali-aika></b></div>
+      </div>
+      <div class="valikkonapit tervetulo-napit">
+        <button class="btn" id="tervetuloUusi" type="button">LUO TILI<small>Olen uusi pelaaja</small></button>
+        <button class="btn btn-oranssi" id="tervetuloVanha" type="button">KIRJAUDU<small>Minulla on jo nimimerkki</small></button>
+      </div>
+    </div>
     <div class="title" id="nimiOtsikko">VALITSE<br>NIMIMERKKI</div>
     <div class="hint" id="nimiOhje"></div>
     <form id="nimiLomake" novalidate hidden>
@@ -785,6 +817,7 @@
       <div id="nimiVirhe" role="alert" hidden></div>
       <button class="btn" id="nimiLaheta" type="submit">VARAA NIMIMERKKI</button>
       <button class="linkki" id="nimiVaihda" type="button">Minulla on jo nimimerkki</button>
+      <button class="linkki" id="nimiTakaisin" type="button">‹ Takaisin</button>
     </form>
     <div id="nimiOdota" hidden>
       <div class="hint" id="nimiOdotaTeksti">Haetaan pelaajaa…</div>
@@ -920,7 +953,7 @@
     </div>
   </div>
   <div class="todiste pois" id="todiste" role="dialog" aria-label="Nimimerkki ja ennätys">
-    <div class="kicker">LIINA JUOKSEE MASCOTIIN</div>
+    <div class="kicker">LIINARUN</div>
     <div class="todiste-osa">
       <span>NIMIMERKKI</span>
       <b id="todisteNimi"></b>

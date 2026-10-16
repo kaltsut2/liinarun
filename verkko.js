@@ -20,6 +20,9 @@ const TUNNUS_AVAIN = 'liinarun.tunnus';
 /* PIN tallennetaan laitteelle vain, jotta pelaaja näkee sen asetuksista.
    Palvelimella se on tiivisteenä, eikä sitä voi hakea sieltä takaisin. */
 const PIN_AVAIN = 'liinarun.pin';
+/* Viimeksi tällä laitteella pelannut nimimerkki: tervetulonäkymä tarjoaa
+   silloin ensisijaisesti kirjautumista ja täyttää nimen valmiiksi. */
+const EDELLINEN_AVAIN = 'liinarun.edellinen';
 
 document.body.classList.add('tunnistamaton');
 
@@ -36,6 +39,7 @@ function muistipaikka(avain) {
 }
 const muisti = muistipaikka(TUNNUS_AVAIN);
 const pinMuisti = muistipaikka(PIN_AVAIN);
+const edellinenMuisti = muistipaikka(EDELLINEN_AVAIN);
 
 /* ---------- palvelinkutsut ---------- */
 class VerkkoVirhe extends Error {
@@ -163,8 +167,30 @@ function asetaTila(uusi) {
   naytaNimiVirhe(null);
 }
 
-function naytaLomake() {
+/* Tervetulonäkymä: Liinarun, vaaliviikon kisa ja kaksi nappia. Jos laite
+   muistaa aiemman pelaajan, KIRJAUDU on ylempänä ja pääpainikkeena. */
+function naytaTervetulo() {
+  const edellinen = edellinenMuisti.hae();
+  const uusi = el('tervetuloUusi'), vanha = el('tervetuloVanha');
+  const ensin = edellinen ? vanha : uusi, toiseksi = edellinen ? uusi : vanha;
+  ensin.classList.remove('btn-oranssi'); toiseksi.classList.add('btn-oranssi');
+  ensin.parentNode.prepend(ensin);
+  ruutu.classList.add('tervetulo');
   ruutu.classList.remove('pois', 'odottaa');
+  ruutu.style.opacity = '1';
+  intro.style.opacity = '0';
+  intro.classList.add('pois');
+}
+function avaaLomake(uusiTila) {
+  asetaTila(uusiTila);
+  const edellinen = edellinenMuisti.hae();
+  if (uusiTila === 'vanha' && edellinen && !kentta.nimi.value) kentta.nimi.value = edellinen;
+  naytaLomake();
+  (uusiTila === 'vanha' && kentta.nimi.value ? kentta.pin : kentta.nimi).focus();
+}
+
+function naytaLomake() {
+  ruutu.classList.remove('pois', 'odottaa', 'tervetulo');
   ruutu.style.opacity = '1';
   intro.style.opacity = '0';
   intro.classList.add('pois');
@@ -173,7 +199,7 @@ function naytaLomake() {
 }
 
 function naytaOdotus(teksti) {
-  ruutu.classList.remove('pois');
+  ruutu.classList.remove('pois', 'tervetulo');
   ruutu.classList.add('odottaa');
   ruutu.style.opacity = '1';
   intro.style.opacity = '0';
@@ -196,7 +222,7 @@ function paastaPeliin() {
 /* ---------- käynnistys ---------- */
 async function tunnista() {
   const tunnus = muisti.hae();
-  if (!tunnus) { asetaTila('uusi'); naytaLomake(); return; }
+  if (!tunnus) { naytaTervetulo(); return; }
 
   naytaOdotus('Haetaan pelaajaa…');
   try {
@@ -207,8 +233,7 @@ async function tunnista() {
       /* Tunnus on poistettu palvelimelta, esim. pelaajan poiston jälkeen. */
       muisti.poista();
       pinMuisti.poista();
-      asetaTila('vanha');
-      naytaLomake();
+      naytaTervetulo();
     } else {
       el('nimiOdotaTeksti').textContent = viesti(e.koodi);
       el('nimiUudelleen').hidden = false;
@@ -232,6 +257,7 @@ lomake.addEventListener('submit', async e => {
       { p_nimimerkki: nimi, p_pin: pin });
     muisti.aseta(vastaus.tunnus);
     pinMuisti.aseta(pin);
+    edellinenMuisti.aseta(nimi);
     asetaPelaaja(vastaus);
     kentta.pin.value = kentta.pin2.value = '';
     document.activeElement && document.activeElement.blur();
@@ -250,6 +276,9 @@ vaihda.addEventListener('click', () => {
   kentta.nimi.focus();
 });
 el('nimiUudelleen').addEventListener('click', tunnista);
+el('tervetuloUusi').addEventListener('click', () => avaaLomake('uusi'));
+el('tervetuloVanha').addEventListener('click', () => avaaLomake('vanha'));
+el('nimiTakaisin').addEventListener('click', () => { naytaVirhe(null); naytaNimiVirhe(null); naytaTervetulo(); });
 
 /* PIN-kenttiin vain numeroita. */
 for (const k of [kentta.pin, kentta.pin2]) {
@@ -272,8 +301,7 @@ export async function kirjauduUlos() {
   asetaTili({ kolikot: 0, potkulaudat: 0, jahtaaja: 'tervis' });
   kentta.nimi.value = ''; kentta.pin.value = ''; kentta.pin2.value = '';
   document.body.classList.add('tunnistamaton');
-  asetaTila('vanha');
-  naytaLomake();
+  naytaTervetulo();
 }
 export { rpc, viesti, SUPABASE_URL, SUPABASE_KEY };
 

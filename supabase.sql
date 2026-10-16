@@ -1,5 +1,5 @@
 -- ===============================================================
---  Liina juoksee Mascotiin — tulostaulun tietokanta
+--  Liinarun — tulostaulun tietokanta
 --
 --  Ääkköset ovat SQL:n sisällä merkkikoodeina (U&'\00e4', regexissä
 --  \u00e4), jotta leikepöydän merkistö ei voi rikkoa niitä. Kommenteissa
