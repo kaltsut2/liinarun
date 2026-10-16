@@ -96,6 +96,34 @@
   #etappiIlmoitus small{display:block;font:800 12px/1.3 Nunito,sans-serif;letter-spacing:.04em}
   #etappiIlmoitus.nakyy{opacity:1;transform:translate(-50%,0) scale(1)}
   #etappiIlmoitus.oma{background:#fff;box-shadow:0 5px 0 #9aa6b2,0 12px 26px rgba(9,18,38,.35)}
+  /* Ensimmäisten juoksujen opastus: yksi liike kerrallaan, häviää kun liike on tehty */
+  #opastus{
+    position:absolute;left:50%;top:27%;transform:translate(-50%,8px) scale(.94);opacity:0;pointer-events:none;
+    display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 20px 12px;border-radius:18px;
+    background:rgba(14,20,32,.62);box-shadow:inset 0 0 0 2px rgba(255,255,255,.16);
+    -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);text-align:center;white-space:nowrap;
+    transition:opacity .25s ease,transform .25s ease;
+  }
+  #opastus.nakyy{opacity:1;transform:translate(-50%,0) scale(1)}
+  #opastus b{font:800 20px/1 'Baloo 2',Nunito,sans-serif;letter-spacing:.02em}
+  #opastus small{font:800 12px/1.2 Nunito,sans-serif;letter-spacing:.04em;opacity:.85}
+  #opastus.opittu{background:rgba(118,192,67,.85)}
+  .opastus-kuva{display:flex;align-items:center;justify-content:center;gap:6px;height:34px}
+  .opastus-kuva svg{width:34px;height:34px}
+  .opastus-kuva kbd{
+    min-width:30px;height:30px;padding:0 7px;box-sizing:border-box;border-radius:8px;
+    display:inline-flex;align-items:center;justify-content:center;
+    background:#fff;color:#12305e;box-shadow:inset 0 -3px 0 rgba(18,48,94,.25);
+    font:900 16px/1 Nunito,sans-serif;
+  }
+  @media (prefers-reduced-motion: no-preference){
+    .opastus-kuva.sivu svg{animation:opastusSivu 1.1s ease-in-out infinite}
+    .opastus-kuva.ylos svg{animation:opastusYlos 1.1s ease-in-out infinite}
+    .opastus-kuva.alas svg{animation:opastusAlas 1.1s ease-in-out infinite}
+    @keyframes opastusSivu{0%,100%{transform:translateX(-10px)}50%{transform:translateX(10px)}}
+    @keyframes opastusYlos{0%{transform:translateY(8px);opacity:0}30%{opacity:1}100%{transform:translateY(-8px);opacity:0}}
+    @keyframes opastusAlas{0%{transform:translateY(-8px);opacity:0}30%{opacity:1}100%{transform:translateY(8px);opacity:0}}
+  }
 
   .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;background:linear-gradient(180deg,rgba(9,18,38,.12),rgba(9,18,38,.58));transition:opacity .35s;color:#fff;padding:0 22px;box-sizing:border-box;pointer-events:none}
   .kicker{font:800 11px/1 Nunito,sans-serif;color:#ffd60a;letter-spacing:.32em}
@@ -532,7 +560,8 @@
   .ohje-kuva{display:block;width:100%;max-width:260px;height:auto;aspect-ratio:2/1;margin-bottom:2px}
   .ohje-3d{position:relative}
   /* koroke ja pokaali tarvitsevat korkeamman rajauksen kuin muut kuvat */
-  #ohjePalkintoKuva,#ohjeRydeKuva{aspect-ratio:16/10;max-width:280px}
+  #ohjePalkintoKuva,#ohjeRydeKuva,#ohjeKolikkoKuva{aspect-ratio:16/10;max-width:280px}
+  .ohje-nuoli{position:absolute;left:50%;top:52%;width:26px;height:auto;z-index:1;transform:translate(-50%,-50%);opacity:.7}
   .ohje-3d canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
   .ohje-salama{position:absolute;left:12%;top:30%;width:26px;height:auto;z-index:1;filter:drop-shadow(0 0 6px rgba(242,96,12,.7))}
   .ohje-salama.oikea{left:auto;right:12%;top:18%;transform:scaleX(-1)}
@@ -673,6 +702,7 @@
     <div id="track"><div id="bar"></div></div>
   </div>
   <div class="hud" id="etappiIlmoitus" aria-live="polite"></div>
+  <div class="hud" id="opastus" aria-live="polite"><div class="opastus-kuva" aria-hidden="true"></div><b></b><small></small></div>
   <button class="hud tyhja" id="scoot" aria-label="Aktivoi potkulauta">
     <svg id="scootKello" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="45"/></svg>
     <svg id="scootIkoni" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -861,22 +891,9 @@
             <p>Kerää potkulauta kaistalta talteen. Kun haluat kyytiin, napauta puhelimella oikean alakulman potkulautanappia tai paina tietokoneella <kbd>R</kbd>. Kyyti kestää kymmenen sekuntia, ja sen ajan lauta on lisäelämä: jos törmäät, menetät laudan, mutta juoksu jatkuu. Napin kehä näyttää, paljonko kyytiä on jäljellä.</p>
           </div></section>
           <section class="ohjesivu ohje-kolikot" aria-label="Ohje 4/5: kolikot"><div class="ohjesivu-sisa">
-            <svg class="ohje-kuva" viewBox="0 0 240 120" aria-hidden="true">
-              <g fill="#ffd60a" stroke="#b97f00" stroke-width="3">
-                <ellipse cx="62" cy="104" rx="26" ry="8"/><ellipse cx="62" cy="94" rx="26" ry="8"/>
-                <ellipse cx="62" cy="84" rx="26" ry="8"/><ellipse cx="62" cy="74" rx="26" ry="8"/>
-                <circle cx="102" cy="46" r="22"/>
-              </g>
-              <circle cx="102" cy="46" r="14" fill="none" stroke="#b97f00" stroke-width="2.5"/>
-              <path d="M102 37l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2-4.5-4.4 6.2-.9z" fill="#b97f00"/>
-              <path d="M134 62h16m-6-6l6 6-6 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".75"/>
-              <path d="M166 116c0-24 8-40 24-40s24 16 24 40z" fill="#fff"/>
-              <path d="M186 78h8l-1 22-3 5-3-5z" fill="#ef6317"/>
-              <circle cx="190" cy="50" r="18" fill="#f2c9a0"/>
-              <path d="M172 48c0-14 8-20 18-20s18 6 18 20c-4-7-10-10-18-10s-14 3-18 10z" fill="#5b3a26"/>
-              <g fill="none" stroke="#12305e" stroke-width="2.5"><circle cx="183" cy="52" r="5.5"/><circle cx="197" cy="52" r="5.5"/><path d="M188.5 52h3"/></g>
-              <path d="M184 62q6 4 12 0" stroke="#12305e" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-            </svg>
+            <div class="ohje-kuva ohje-3d" id="ohjeKolikkoKuva" aria-hidden="true">
+              <svg class="ohje-nuoli" viewBox="0 0 24 16"><path d="M2 8h18m-6-6l6 6-6 6" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            </div>
             <h3>KOLIKOT</h3>
             <p>Kerää kolikoita juostessasi. Niillä voit ostaa Liinan perään uusia jahtaajia: eri opettajia ja muita henkilökunnan jäseniä.</p>
           </div></section>

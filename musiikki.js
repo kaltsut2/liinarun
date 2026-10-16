@@ -11,8 +11,9 @@
    Voimakkuutta säädetään Web Audion vahvistimella, koska iPhonen Safari
    ei anna muuttaa audio-elementin omaa voimakkuutta.
 
-   Äänitehosteet (kolikon kilahdus, NOCCOn swoosh, renkaan vinkuna)
-   syntetisoidaan Web Audiolla. Ainoa tiedosto on NOCCO-tölkin avausääni
+   Äänitehosteet (kolikon kilahdus, NOCCOn swoosh, renkaan vinkuna, hyppy,
+   kierähdys, kiinnijääminen ja potkulaudan menetys) syntetisoidaan Web
+   Audiolla. Ainoa tiedosto on NOCCO-tölkin avausääni
    (aanet/tolkki.m4a, 13 kt), joka puretaan muistiin valmiiksi, jotta se
    soi heti poimittaessa. liina-scene.js pyytää ääniä tapahtumalla
    'liina:aani'. Tehosteilla on oma valinta.
@@ -209,7 +210,92 @@ function nocco() {
   setTimeout(() => { try { swoosh(); } catch {} }, tolkkiPuskuri ? 140 : 0);
 }
 
-const TEHOSTEET = { kolikko: kilahdus, swoosh, nocco, rengas };
+/* hyppy: lyhyt nouseva pomppu */
+function hyppy() {
+  const t = ctx.currentTime;
+  for (const [tyyppi, kerroin, huippu] of [['triangle', 1, 0.16], ['sine', 2, 0.05]]) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = tyyppi;
+    o.frequency.setValueAtTime(260 * kerroin, t);
+    o.frequency.exponentialRampToValueAtTime(640 * kerroin, t + 0.13);
+    verho(g, t, huippu, 0.008, 0.18);
+    o.connect(g).connect(tehosteVahvistin);
+    o.start(t); o.stop(t + 0.2);
+  }
+}
+
+/* kierähdys: alaspäin liukuva suhahdus ja pehmeä tömähdys maahan */
+function kieri() {
+  const t = ctx.currentTime;
+  const lahde = ctx.createBufferSource();
+  lahde.buffer = kohinaPuskuri();
+  const suodin = ctx.createBiquadFilter();
+  suodin.type = 'lowpass'; suodin.Q.value = 2;
+  suodin.frequency.setValueAtTime(1800, t);
+  suodin.frequency.exponentialRampToValueAtTime(260, t + 0.32);
+  const g = ctx.createGain();
+  verho(g, t, 0.32, 0.03, 0.34);
+  lahde.connect(suodin).connect(g).connect(tehosteVahvistin);
+  lahde.start(t); lahde.stop(t + 0.36);
+  const o = ctx.createOscillator(), og = ctx.createGain();
+  o.frequency.setValueAtTime(150, t);
+  o.frequency.exponentialRampToValueAtTime(70, t + 0.12);
+  verho(og, t, 0.22, 0.005, 0.14);
+  o.connect(og).connect(tehosteVahvistin);
+  o.start(t); o.stop(t + 0.16);
+}
+
+/* matala tömähdys: törmäyksen ja kolahduksen pohja */
+function tomahdys(t, voima, kesto) {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.frequency.setValueAtTime(115, t);
+  o.frequency.exponentialRampToValueAtTime(38, t + kesto);
+  verho(g, t, 0.55 * voima, 0.004, kesto);
+  o.connect(g).connect(tehosteVahvistin);
+  o.start(t); o.stop(t + kesto + 0.02);
+  const lahde = ctx.createBufferSource(), suodin = ctx.createBiquadFilter(), ng = ctx.createGain();
+  lahde.buffer = kohinaPuskuri();
+  suodin.type = 'lowpass'; suodin.frequency.value = 900;
+  verho(ng, t, 0.5 * voima, 0.003, kesto * 0.6);
+  lahde.connect(suodin).connect(ng).connect(tehosteVahvistin);
+  lahde.start(t); lahde.stop(t + kesto);
+}
+
+/* kiinnijääminen: tömähdys ja perään laskeva kaksisävelinen "voi ei" */
+function tormays() {
+  const t = ctx.currentTime;
+  tomahdys(t, 1, 0.42);
+  [[392, 0.16, 0.16], [262, 0.34, 0.42]].forEach(([f, viive, kesto]) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    const vib = ctx.createOscillator(), vibMaara = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(f, t + viive);
+    o.frequency.exponentialRampToValueAtTime(f * 0.88, t + viive + kesto);
+    vib.frequency.value = 7; vibMaara.gain.value = f * 0.025;
+    vib.connect(vibMaara).connect(o.frequency);
+    verho(g, t + viive, 0.15, 0.02, kesto);
+    o.connect(g).connect(tehosteVahvistin);
+    o.start(t + viive); o.stop(t + viive + kesto + 0.03);
+    vib.start(t + viive); vib.stop(t + viive + kesto + 0.03);
+  });
+}
+
+/* potkulauta menetetään mutta juoksu jatkuu: kevyempi metallinen kolahdus */
+function kolahdus() {
+  const t = ctx.currentTime;
+  tomahdys(t, 0.55, 0.22);
+  const suodin = ctx.createBiquadFilter(), g = ctx.createGain();
+  suodin.type = 'bandpass'; suodin.frequency.value = 1400; suodin.Q.value = 6;
+  verho(g, t, 0.2, 0.003, 0.2);
+  suodin.connect(g).connect(tehosteVahvistin);
+  for (const f of [523, 787]) {
+    const o = ctx.createOscillator();
+    o.type = 'square'; o.frequency.value = f;
+    o.connect(suodin); o.start(t); o.stop(t + 0.22);
+  }
+}
+
+const TEHOSTEET = { kolikko: kilahdus, swoosh, nocco, rengas, hyppy, kieri, tormays, kolahdus };
 document.addEventListener('liina:aani', e => {
   if (!tehosteet || !ctx || document.hidden) return;
   if (ctx.state === 'suspended') ctx.resume().catch(() => {});

@@ -71,7 +71,7 @@ function eiVarjoa(juuri) { juuri.traverse(o => { if (o.isMesh) o.castShadow = fa
    mukaan. Enintään 25 s, jonka jälkeen peli aukeaa rakennetuilla
    varamalleilla. Mallien osoitteissa on versio, koska service worker
    pitää ne välimuistissa: uusi malli samalla nimellä = nosta MALLIVERSIO. */
-const MALLIVERSIO = 2;
+const MALLIVERSIO = 3;
 const lataus = {
   paino: { museo: 2.8, liina: 3.8, tervis: 1.1 },
   osuus: { museo: 0, liina: 0, tervis: 0 },
@@ -788,31 +788,11 @@ const mascot = new THREE.Group();
     fr.position.set(x, 11.4, 5.95); mascot.add(fr);
   }
 
-  /* canopy + fascia with the shop name */
+  /* canopy + fascia; the shop name is the SMARKET sign model loaded below */
   const canopy = new THREE.Mesh(new THREE.BoxGeometry(27, 0.7, 15), MAT.granite);
   canopy.position.set(0, 6.4, 0); canopy.castShadow = true; mascot.add(canopy);
   const fascia = new THREE.Mesh(new THREE.BoxGeometry(27, 3.9, 0.8), MAT.navy);
   fascia.position.set(0, 8.6, 7.2); mascot.add(fascia);
-  const nameTex = canvasTex(760, 190, (g, w, h) => {
-    g.fillStyle = '#12305e'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#ffffff';
-    g.font = "800 128px 'Baloo 2', Nunito, sans-serif";
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('MASCOT', w / 2, h / 2 + 4);
-  });
-  const nameSign = new THREE.Mesh(new THREE.PlaneGeometry(16, 4),
-    new THREE.MeshBasicMaterial({ map: nameTex }));
-  nameSign.position.set(0, 8.6, 7.66); mascot.add(nameSign);
-  const assaTex = canvasTex(280, 190, (g, w, h) => {
-    g.fillStyle = '#ffdc23'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#12305e';
-    g.font = "800 108px 'Baloo 2', Nunito, sans-serif";
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('ÄSSÄ', w / 2, h / 2 + 4);
-  });
-  const assa = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 3.5),
-    new THREE.MeshBasicMaterial({ map: assaTex }));
-  assa.position.set(-9.9, 8.6, 7.66); mascot.add(assa);
 
   /* ground floor: yellow shop windows in navy frames */
   for (const sx of [-1, 1]) {
@@ -833,9 +813,19 @@ const mascot = new THREE.Group();
   /* the entrance: navy portal, twin glass doors, welcome strip */
   const portal = new THREE.Mesh(new THREE.BoxGeometry(9, 5.6, 0.7), MAT.navy);
   portal.position.set(0, 2.8, 6.8); mascot.add(portal);
-  const welcome = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 0.9),
-    new THREE.MeshBasicMaterial({ map: signTex('TERVETULOA', '#12305e', '#ffffff') }));
-  welcome.position.set(0, 5.2, 7.18); mascot.add(welcome);
+  /* oma kangas samassa mittasuhteessa kuin taso (5,4 × 1,14), ettei teksti litisty */
+  const welcomeTex = canvasTex(760, 160, (g, w, h) => {
+    g.fillStyle = '#12305e'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#ffffff';
+    g.font = "800 92px 'Baloo 2', Nunito, sans-serif";
+    const leveys = g.measureText('TERVETULOA').width;
+    if (leveys > w * 0.9) g.font = `800 ${Math.floor(92 * w * 0.9 / leveys)}px 'Baloo 2', Nunito, sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('TERVETULOA', w / 2, h / 2 + 4);
+  });
+  const welcome = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 1.14),
+    new THREE.MeshBasicMaterial({ map: welcomeTex }));
+  welcome.position.set(0, 5.22, 7.18); mascot.add(welcome);
   const hours = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.5),
     new THREE.MeshBasicMaterial({ map: signTex('8', '#ffdc23', '#12305e', '24') }));
   hours.position.set(3.5, 2.9, 7.2); mascot.add(hours);
@@ -857,6 +847,32 @@ const mascot = new THREE.Group();
   yhdistaMateriaaleittain(eiVarjoa(mascot));
   scene.add(mascot);
 }
+
+/* Kauppakyltti (3dmallit/kauppakyltti.glb): SMARKET-kirjaimet kiskoineen
+   Mascotin katoksen yläpuolelle navy-otsalaudalle (27 × 3,9 m, etupinta
+   z 7,6), entisen MASCOT-tekstin paikalle. Malli on 9,5 m leveä ja 1,9 m
+   korkea, ja kirjaimet osoittavat mallissa -z:aan, joten se käännetään.
+   Kirjainten pinnat valkoisiksi; kiskot ja ruuvit jäävät harmaiksi. */
+(async () => {
+  try {
+    const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+    const kyltti = (await new GLTFLoader().loadAsync(`3dmallit/kauppakyltti_pakattu.glb?v=${MALLIVERSIO}`)).scene;
+    const VALKOISET = { kirjain_pinta: 0xffffff, kirjain_reuna: 0xe8ecf2 };
+    kyltti.traverse(o => {
+      if (!o.isMesh) return;
+      const v = o.material;
+      o.material = toon(VALKOISET[v.name] ?? (v.color ? v.color.getHex() : 0xffffff));
+      o.castShadow = false;
+    });
+    yhdistaMateriaaleittain(kyltti);
+    kyltti.rotation.y = Math.PI;
+    kyltti.scale.setScalar(0.95);              /* 9 m leveä, mahtuu läheltäkin talojen väliin */
+    kyltti.position.set(0, 7.73, 7.8);        /* pystykeskikohta otsalaudan keskellä 8,6 m */
+    mascot.add(kyltti);
+  } catch (e) {
+    console.warn('Kauppakylttiä ei saatu ladattua.', e);
+  }
+})();
 
 /* Museo — start building, behind the runner */
 const museo = new THREE.Group();
@@ -1342,9 +1358,7 @@ function makeCar(kind) {
     /* Katot ovat hypyn huipun (2,10 m) yläpuolella, jotta autojen yli ei
        näytä pääsevän. Liina on 2,45 m pitkä, joten alkuperäiset 1,5–1,7 m
        katot jäivät rinnan korkeudelle ja houkuttelivat hyppäämään. */
-    tesla:  { body: MAT.white,        w: 1.88, nose: 2.35, tail: -2.32, waist: 1.42, roof: 2.50, gf: 0.55, gr: -1.85 },
-    bmw:    { body: MAT.red,          w: 1.84, nose: 2.3,  tail: -2.28, waist: 1.30, roof: 2.30, gf: 0.35, gr: -1.95 },
-    wagon:  { body: toon(0x6f8090),   w: 1.82, nose: 2.26, tail: -2.24, waist: 1.44, roof: 2.52, gf: 0.6,  gr: -2.0 }
+    tesla:  { body: MAT.white,        w: 1.88, nose: 2.35, tail: -2.32, waist: 1.42, roof: 2.50, gf: 0.55, gr: -1.85 }
   }[kind];
   const { nose, tail, waist, roof, gf, gr, w } = spec;
   /* Alakorin korkeudet venytetään helman (0,26) yläpuolelta, pyörät eivät. */
@@ -1406,20 +1420,26 @@ function makeCar(kind) {
 /* ---------- vaikeus ----------
    Kaikki pelin vaikeuteen vaikuttavat luvut yhdessä paikassa.
    Huippuvauhti pidetään 31 m/s:ssa: palvelin hylkää tuloksen, jos
-   keskivauhti boosteineen ylittää 40 m/s (supabase.sql). */
+   keskivauhti boosteineen ylittää 40 m/s (supabase.sql).
+   Peli vaikeutuu kahdella tavalla: vauhti kasvaa ensimmäisten sekuntien
+   aikana huippuunsa, ja autojen väli tihenee tasaisesti
+   tiheneminen-matkan ajan. Ohitettavuussäännöt (alla) pätevät aina,
+   joten taitava pelaaja voi juosta loputtomiin. */
 const VAIKEUS = {
   alkuvauhti: 20, huippuvauhti: 31, kiihtyvyys: 0.9,   /* m/s, m/s, m/s² */
   autoja: 9,
-  autovali: [16, 12],          /* uusi auto: 16–28 m edellisen taakse */
-  autonVauhti: [5, 5],         /* henkilöauto ajaa 5–10 m/s maailmaa nopeammin */
-  bussinVauhti: [3, 2],        /* bussi 3–5 m/s */
-  vapaaIkkuna: 18,             /* tällä matkalla vähintään yksi kaista vapaana */
+  autonVauhti: 7,              /* kaikki autot ja bussit ajavat 7 m/s maailmaa nopeammin */
+  autovaliAlku: [18, 12],      /* uusi auto 18–30 m edellisen taakse juoksun alussa */
+  autovaliLoppu: [6, 7],       /* ja 6–13 m täydessä tiheydessä */
+  tiheneminen: 3000,           /* m, jonka aikana väli tihenee alusta loppuun */
+  reaktio: 0.18,               /* s, pelaajalle aina jäävä aika kaistanvaihtoon */
   puomeja: 5,
   puomivali: [60, 60]          /* seuraava puomi 60–120 m edellisen taakse */
 };
 const satunnainen = ([a, b]) => a + Math.random() * b;
 
-const carKinds = ['tesla', 'bmw', 'bus', 'wagon', 'tesla', 'bus'];
+/* Henkilöautot ovat Tesloja (rakennettu malli, kunnes 3D-malli on ladattu), bussit AGT:n */
+const carKinds = ['tesla', 'tesla', 'bus', 'tesla', 'tesla', 'bus'];
 const startLanes = [-1, 1, 0, 1, -1, 0, 0, -1, 1];
 const cars = [];
 for (let i = 0; i < VAIKEUS.autoja; i++) {
@@ -1429,39 +1449,170 @@ for (let i = 0; i < VAIKEUS.autoja; i++) {
   const lane = startLanes[i];
   c.position.set(lane * LANE_W, 0, -80 - i * 32);
   c.userData.lane = lane;
-  c.userData.speed = c.userData.perus = satunnainen(kind === 'bus' ? VAIKEUS.bussinVauhti : VAIKEUS.autonVauhti);
+  c.userData.speed = c.userData.perus = VAIKEUS.autonVauhti;
   scene.add(c);
   cars.push(c);
 }
 
-/* Kierrätetty auto sijoitetaan niin, että sen kohdalla jää vähintään yksi
-   kaista vapaaksi (VAIKEUS.vapaaIkkuna). Puomi sulkee kaistan vain, jos auto
-   ehtisi saavuttaa sen ennen kuin puomi on ohittanut pelaajan: autot ajavat
-   maailmaa nopeammin eivätkä saa ajaa puomin läpi. */
-function respawnCar(c) {
-  const nopeus = satunnainen(c.userData.kind === 'bus' ? VAIKEUS.bussinVauhti : VAIKEUS.autonVauhti);
-  const v = Math.max(VAIKEUS.alkuvauhti, S.speed);
-  let z = Math.min(...cars.map(o => o.position.z)) - satunnainen(VAIKEUS.autovali);
-  let free = [];
-  for (let yritys = 0; yritys < 6; yritys++) {
-    const taken = cars.filter(o => o !== c && Math.abs(o.position.z - z) < VAIKEUS.vapaaIkkuna).map(o => o.userData.lane);
-    for (const p of puomit) {
-      if (p.visible && p.position.z > z - 4 &&
-          (p.position.z - z) / nopeus < Math.max(0, (16 - p.position.z) / v) + 0.5) taken.push(p.userData.lane);
+/* ---------- ei umpikujia ----------
+   Kaikki autot ajavat samaa vauhtia, joten niiden keskinäiset välit eivät
+   muutu matkalla, eivätkä myöskään boosti tai kiihtyvä vauhti muuta
+   järjestystä. Siksi ohitettavuus voidaan varmistaa jo silloin, kun auto
+   sijoitetaan kauas. Jokainen auto varaa kaistaltaan z-välin, jolla
+   pelaaja osuisi siihen, ja väliä levennetään kummastakin päästä
+   MARGINAALIn verran: matka, jonka autot kulkevat reaktioajassa
+   suurimmalla mahdollisella vauhdilla (huippuvauhti boostilla).
+
+   Säännöt, jotka yhdessä takaavat, ettei elossa olevasta tilanteesta ole
+   koskaan pakko törmätä:
+   1. Missään kohdassa ei ole kaikkia kolmea kaistaa varattuna.
+   2. Jos sivukaistan ja keskikaistan varaukset menevät päällekkäin,
+      sivukaistan auto tulee pelaajan kohdalle ensin (vähintään
+      marginaalin verran aiemmin). Silloin sivukaistalla oleva ehtii aina
+      keskikaistan yli toiselle sivulle, eikä kukaan voi jäädä sivulle
+      keskikaistan auton viereen odottamaan omalle kaistalleen tulevaa
+      autoa: sellaista autoa ei sijoiteta. Sääntö 1 takaa, että toinen
+      sivu on silloin vapaa koko keskikaistan auton ohituksen ajan.
+   Saman kaistan peräkkäisten autojen väliin jätetään vähintään 3 m, jotta
+   ne eivät koskaan joudu jonoon ja hidasta. */
+const MARGINAALI = VAIKEUS.reaktio * (VAIKEUS.huippuvauhti * 1.5 + VAIKEUS.autonVauhti);
+const varausPuoli = c => (c.userData.len || 4.6) / 2 + 0.5;    /* kuten törmäystarkistuksessa */
+const varaus = (lane, z, puoli) => ({ lane, lahi: z + puoli, kauko: z - puoli });
+
+function ohitettava(uusi, muut) {
+  const M = MARGINAALI;
+  const osuvat = muut.filter(o => o.kauko - M < uusi.lahi + M && uusi.kauko - M < o.lahi + M);
+  for (const o of osuvat) {
+    if (o.lane === uusi.lane) {
+      if (Math.max(o.kauko - uusi.lahi, uusi.kauko - o.lahi) < 2) return false;   /* väli alle 3 m */
+      continue;
     }
-    free = [-1, 0, 1].filter(l => !taken.includes(l)).sort(() => Math.random() - 0.5);
-    if (free.length >= 2) break;
-    z -= 24;
+    if (uusi.lane === 0 || o.lane === 0) {
+      const sivu = uusi.lane === 0 ? o : uusi, keski = uusi.lane === 0 ? uusi : o;
+      if (sivu.lahi < keski.lahi + M) return false;
+    }
   }
-  /* yksi vapaa kaista jätetään aina; jos sellaista ei löydy, auto odottaa kaukana */
-  let pick;
-  if (free.length >= 2) pick = free[Math.floor(Math.random() * (free.length - 1))];
-  else { pick = [-1, 0, 1][Math.floor(Math.random() * 3)]; z -= 150; }
+  for (const a of osuvat) for (const b of osuvat) {
+    if (a.lane === uusi.lane || b.lane === uusi.lane || a.lane >= b.lane) continue;
+    if (Math.max(uusi.kauko, a.kauko, b.kauko) - M < Math.min(uusi.lahi, a.lahi, b.lahi) + M) return false;
+  }
+  return true;
+}
+
+/* Autojen väli tihenee juostun matkan mukana */
+function autovali() {
+  const f = Math.min(1, S.dist / VAIKEUS.tiheneminen);
+  const [a0, b0] = VAIKEUS.autovaliAlku, [a1, b1] = VAIKEUS.autovaliLoppu;
+  return [a0 + (a1 - a0) * f, b0 + (b1 - b0) * f];
+}
+
+/* Kierrätetty auto sijoitetaan kaikkien muiden taakse satunnaiselle
+   kaistalle, joka täyttää ohitettavuussäännöt. Jos mikään kaista ei käy,
+   kohtaa siirretään kauemmas, kunnes käy. Lisäksi puomi sulkee kaistan,
+   jos auto ehtisi saavuttaa sen ennen kuin puomi on ohittanut pelaajan:
+   autot ajavat maailmaa nopeammin eivätkä saa ajaa puomin läpi. */
+function respawnCar(c) {
+  const nopeus = VAIKEUS.autonVauhti;
+  const v = Math.max(VAIKEUS.alkuvauhti, S.speed);
+  const puoli = varausPuoli(c);
+  const muut = cars.filter(o => o !== c);
+  const varaukset = muut.map(o => varaus(o.userData.lane, o.position.z, varausPuoli(o)));
+  let z = Math.min(-60, ...muut.map(o => o.position.z)) - satunnainen(autovali());
+  let pick = null;
+  for (let yritys = 0; yritys < 200 && pick === null; yritys++) {
+    const kaistat = [-1, 0, 1].sort(() => Math.random() - 0.5);
+    pick = kaistat.find(l => ohitettava(varaus(l, z, puoli), varaukset) && !puomit.some(p =>
+      p.visible && p.userData.lane === l && p.position.z > z - 4 &&
+      (p.position.z - z) / nopeus < Math.max(0, (16 - p.position.z) / v) + 0.5)) ?? null;
+    if (pick === null) z -= 3;
+  }
+  if (pick === null) pick = 0;        /* 600 m muiden takana; ei käytännössä tapahdu */
   c.userData.lane = pick;
   c.position.set(pick * LANE_W, 0, z);
   c.userData.speed = c.userData.perus = nopeus;
+  arvoVari(c);
   piilotaKiinniJaavat(c);
 }
+
+/* ---------- Tesla-malli ----------
+   3dmallit/tesla.glb korvaa rakennetut henkilöautot, kun se on ladattu.
+   Malli on mitoitettu oikeaksi autoksi (4,35 m, katto 1,45 m) ja sen keula
+   osoittaa -z:aan. Se käännetään keula kameraan, skaalataan rakennetun
+   Teslan pituiseksi (törmäys- ja ohitettavuussäännöt käyttävät samaa
+   userData.leniä) ja venytetään pystysuunnassa y 0,6 m:n yläpuolelta
+   niin, että katto on 2,2 m: hypyn huipun (2,10 m) yläpuolella, jottei
+   auton yli näytä pääsevän. Pyörät eivät veny, joten ne pysyvät pyöreinä.
+   Osat yhdistetään materiaaleittain yhdeksi pohjaksi, jonka geometriaa
+   kaikki autot jakavat; vanteiden lavat ja saumaviivat jätetään pois,
+   koska ne eivät erotu pelikamerasta. Korin väri arvotaan TESLA_VARIT-
+   listasta aina, kun auto tulee uudelleen tielle. */
+const TESLA_VARIT = [0xffc8dd, 0x00b4d8, 0xffc300, 0x000000, 0xef233c, 0xe85d04];
+const TESLA_PYORAT = new Set(['rengas', 'vanne_levy', 'vannesuoja', 'napa', 'pyorakotelo']);
+const TESLA_POIS = new Set(['vannelapa', 'saumaviiva']);
+function arvoVari(c) {
+  if (c.userData.kori) c.userData.kori.color.setHex(TESLA_VARIT[Math.floor(Math.random() * TESLA_VARIT.length)]);
+}
+(async () => {
+  try {
+    const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+    const juuri = (await new GLTFLoader().loadAsync(`3dmallit/tesla_pakattu.glb?v=${MALLIVERSIO}`)).scene;
+    juuri.updateMatrixWorld(true);
+    const laatikko = new THREE.Box3().setFromObject(juuri);
+    const teslat = cars.filter(c => c.userData.kind === 'tesla');
+    const pituus = teslat[0]?.userData.len ?? 4.67;
+    const s = pituus / (laatikko.max.z - laatikko.min.z);
+    const keskiZ = (laatikko.max.z + laatikko.min.z) / 2, pohja = laatikko.min.y;
+    const Y0 = 0.6, KATTO = 2.2;
+    const K = (KATTO - Y0) / ((laatikko.max.y - pohja) * s - Y0);
+    const aineet = new Map(), ryhmat = new Map();
+    juuri.traverse(o => {
+      const nimi = o.name.replace(/_\d+$/, '');       /* GLTFLoader numeroi samannimiset osat */
+      if (!o.isMesh || TESLA_POIS.has(nimi)) return;
+      const g = o.geometry.clone();
+      liukuluvuiksi(g);
+      if (!g.index) g.setIndex([...Array(g.attributes.position.count).keys()]);
+      g.applyMatrix4(o.matrixWorld);
+      const pyora = TESLA_PYORAT.has(nimi);
+      const pos = g.attributes.position, nor = g.attributes.normal;
+      for (let i = 0; i < pos.count; i++) {
+        /* keula +z:aan: kierto 180° y-akselin ympäri */
+        let y = (pos.getY(i) - pohja) * s;
+        const venyy = !pyora && y > Y0;
+        if (venyy) y = Y0 + (y - Y0) * K;
+        pos.setXYZ(i, -pos.getX(i) * s, y, -(pos.getZ(i) - keskiZ) * s);
+        if (nor) {
+          const n = new THREE.Vector3(-nor.getX(i), nor.getY(i) / (venyy ? K : 1), -nor.getZ(i)).normalize();
+          nor.setXYZ(i, n.x, n.y, n.z);
+        }
+      }
+      const v = o.material;
+      if (!aineet.has(v)) aineet.set(v, v.isMeshBasicMaterial ? v : toon(v.color ? v.color.getHex() : 0xffffff,
+        { ...(v.map ? { map: v.map } : {}), side: v.side, transparent: v.transparent, opacity: v.opacity }));
+      const aine = aineet.get(v);
+      const avain = `${aine.uuid}|${Object.keys(g.attributes).sort()}`;
+      if (!ryhmat.has(avain)) ryhmat.set(avain, { aine, nimi: v.name, geot: [] });
+      ryhmat.get(avain).geot.push(g);
+    });
+    const osat = [...ryhmat.values()].map(r => {
+      const m = new THREE.Mesh(mergeGeometries(r.geot, false), r.aine);
+      m.name = r.nimi;
+      m.castShadow = r.nimi === 'kori_valkoinen';
+      return m;
+    });
+    for (const c of teslat) {
+      for (const o of [...c.children]) c.remove(o);
+      c.userData.kori = osat.find(o => o.name === 'kori_valkoinen').material.clone();
+      for (const osa of osat) {
+        const m = osa.clone();
+        if (osa.name === 'kori_valkoinen') m.material = c.userData.kori;
+        c.add(m);
+      }
+      arvoVari(c);
+    }
+  } catch (e) {
+    console.warn('Tesla-mallia ei saatu ladattua; rakennetut autot jäävät.', e);
+  }
+})();
 
 /* ---------- autot eivät aja minkään läpi ----------
    Autot ajavat maailmaa nopeammin (v + oma vauhti), joten ne saavuttavat
@@ -1643,7 +1794,7 @@ for (let i = 0; i < 3; i++) {
   scoots.push(tilt);
 }
 
-/* Ohjeiden 3D-kuvat (NOCCO-tölkki ja Ryde-potkulauta): pelin omat mallit
+/* Ohjeiden 3D-kuvat (NOCCO-tölkki, Ryde-potkulauta, kolikot ja palkinnot): pelin omat mallit
    pienellä omalla piirtäjällä. Kortteja näkyy yksi kerrallaan, joten yksi
    piirtäjä riittää: sen kangas siirretään näkyvän kortin kuvapaikkaan.
    Piirtäjä luodaan vasta, kun ohjeet avataan ensimmäisen kerran. */
@@ -1819,7 +1970,131 @@ const ohjeKuvat = (() => {
     } };
   }
 
-  const rakentajat = { ohjeNoccoKuva: nocco, ohjeRydeKuva: ryde, ohjePalkintoKuva: palkinto };
+  /* Kolikko kuten oikea raha: korotettu reunus, matala kenttä, uurrettu
+     syrjä ja kohokuvioinen tähti kummallakin puolella. Kasvot +z:aan. */
+  function teeKolikko() {
+    const g = new THREE.Group();
+    const R = 0.42, P = 0.06, REUNA = 0.085;
+    const profiili = [[0, -P], [0.33, -P], [0.345, -REUNA], [0.4, -REUNA], [R, -0.068],
+      [R, 0.068], [0.4, REUNA], [0.345, REUNA], [0.33, P], [0, P]].map(([x, y]) => new THREE.Vector2(x, y));
+    const runkoGeo = new THREE.LatheGeometry(profiili, 72);
+    runkoGeo.rotateX(Math.PI / 2);
+    g.add(new THREE.Mesh(runkoGeo, toon(0xf4bf2a, { emissive: 0x5a3c00, emissiveIntensity: 0.35 })));
+    /* syrjän uurteet */
+    const UURTEITA = 64;
+    const uurteet = new THREE.InstancedMesh(new THREE.BoxGeometry(0.016, 0.022, 0.118), toon(0xc98a0a), UURTEITA);
+    const apu = new THREE.Object3D();
+    for (let i = 0; i < UURTEITA; i++) {
+      const a = i / UURTEITA * Math.PI * 2;
+      apu.position.set(Math.cos(a) * (R + 0.004), Math.sin(a) * (R + 0.004), 0);
+      apu.rotation.set(0, 0, a);
+      apu.updateMatrix();
+      uurteet.setMatrixAt(i, apu.matrix);
+    }
+    g.add(uurteet);
+    /* kohotähti ja ohut helmirengas kentän reunalla */
+    const tahti = new THREE.Shape();
+    for (let i = 0; i < 10; i++) {
+      const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.085 : 0.2;
+      i ? tahti.lineTo(Math.cos(a) * r, Math.sin(a) * r) : tahti.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    const tahtiGeo = new THREE.ExtrudeGeometry(tahti, { depth: 0.012, bevelEnabled: true,
+      bevelThickness: 0.01, bevelSize: 0.012, bevelSegments: 2 });
+    const tahtiAine = toon(0xffdc4a, { emissive: 0x6b4a00, emissiveIntensity: 0.4 });
+    const rengasAine = toon(0xd99a12);
+    for (const puoli of [1, -1]) {
+      const t = new THREE.Mesh(tahtiGeo, tahtiAine);
+      t.position.z = puoli * (P - 0.004);
+      if (puoli < 0) t.rotation.y = Math.PI;
+      const helmet = new THREE.Mesh(new THREE.TorusGeometry(0.29, 0.009, 6, 64), rengasAine);
+      helmet.position.z = puoli * P;
+      g.add(t, helmet);
+    }
+    return g;
+  }
+
+  /* Kolikot: kiiltävä kolikko pyörii kolikkopinon yllä, ja Queen Mari
+     (jonka kolikoilla voi ostaa) keinuu puolelta toiselle. Mallin oma
+     kopio ladataan tänne erikseen; tiedosto tulee välimuistista. */
+  function kolikot() {
+    const maisema = new THREE.Scene(); valot(maisema);
+    const kamera = new THREE.PerspectiveCamera(30, 2, 0.1, 50);
+    kamera.position.set(0, 1.25, 4.6); kamera.lookAt(0, 1.0, 0);
+
+    const pino = new THREE.Group();
+    for (let i = 0; i < 5; i++) {
+      const k = teeKolikko();
+      k.rotation.set(-Math.PI / 2, 0, i * 1.3);
+      k.position.set(Math.sin(i * 2.1) * 0.035, 0.085 + i * 0.165, Math.cos(i * 1.7) * 0.03);
+      pino.add(k);
+    }
+    pino.scale.setScalar(0.95);
+    pino.position.x = -0.95;
+    const kolikko = teeKolikko();
+    kolikko.scale.setScalar(1.25);
+    const hohtoAine = hehku(0xffc21a, 1.0);
+    const hohto = new THREE.Mesh(new THREE.SphereGeometry(0.62, 32, 20), hohtoAine);
+    const kultavalo = new THREE.PointLight(0xffd23a, 4, 3, 1.4);
+    const kipina = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    const pinoVarjo = varjo(0.55, 0.22); pinoVarjo.position.x = -0.95;
+
+    const mari = new THREE.Group();
+    mari.position.x = 0.95;
+    const mariVarjo = varjo(0.5, 0.2); mariVarjo.position.x = 0.95;
+    let kadet = null;
+    (async () => {
+      try {
+        const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+        const juuri = (await new GLTFLoader().loadAsync(`${MALLIT.queen_mari.url}?v=${MALLIVERSIO}`)).scene;
+        const aineet = new Map();
+        juuri.traverse(o => {
+          if (!o.isMesh) return;
+          const v = o.material;
+          if (!aineet.has(v)) aineet.set(v, toon(v.color ? v.color.getHex() : 0xffffff, {
+            ...(v.map ? { map: v.map } : {}),
+            side: v.side, transparent: v.transparent, opacity: v.opacity, alphaTest: v.alphaTest
+          }));
+          o.material = aineet.get(v);
+        });
+        const laatikko = new THREE.Box3().setFromObject(juuri);
+        juuri.scale.setScalar(1.95 / (laatikko.max.y - laatikko.min.y));
+        juuri.position.y = -laatikko.min.y * juuri.scale.y;
+        juuri.rotation.y = Math.PI;            /* malli juoksee -z:aan; kasvot kameraan */
+        kadet = [juuri.getObjectByName('kasi_oikea'), juuri.getObjectByName('kasi_vasen')];
+        mari.add(juuri);
+      } catch (e) { console.warn('Queen Maria ei saatu ohjeisiin.', e); }
+    })();
+
+    maisema.add(pinoVarjo, mariVarjo, pino, hohto, kultavalo, kolikko, kipina, mari);
+    return { maisema, kamera, liiku(t) {
+      kolikko.position.set(-0.95, 1.5 + Math.sin(t * 2.0) * 0.06, 0);
+      kolikko.rotation.y = t * 1.8;
+      kolikko.rotation.x = Math.sin(t * 1.1) * 0.12;
+      hohto.position.copy(kolikko.position);
+      kultavalo.position.set(-0.95 + Math.cos(t * 1.3) * 0.6, 1.9, 0.9);
+      const syke = 0.5 + 0.5 * Math.sin(t * 3.0);
+      hohtoAine.uniforms.voima.value = 0.55 + syke * 0.7;
+      kultavalo.intensity = 3 + syke * 3;
+      /* välähdys kiertää kolikon reunaa */
+      const a = t * 2.4;
+      kipina.position.set(-0.95 + Math.cos(a) * 0.5, kolikko.position.y + Math.sin(a) * 0.5, 0.25);
+      kipina.scale.setScalar(Math.max(0, Math.sin(t * 4.2)) * 1.4);
+      kipina.rotation.y = t * 3;
+      /* Mari keinuu jalkojensa varassa puolelta toiselle */
+      const keinu = Math.sin(t * 2.0);
+      mari.rotation.z = keinu * 0.11;
+      mari.rotation.y = -0.25 + keinu * 0.18;
+      mari.position.y = Math.abs(Math.cos(t * 2.0)) * 0.03;
+      if (kadet?.[0] && kadet[1]) {
+        kadet[0].rotation.z = -0.1 - Math.max(0, keinu) * 0.2;
+        kadet[1].rotation.z = 0.1 + Math.max(0, -keinu) * 0.2;
+        kadet[0].rotation.x = keinu * 0.15;
+        kadet[1].rotation.x = -keinu * 0.15;
+      }
+    } };
+  }
+
+  const rakentajat = { ohjeNoccoKuva: nocco, ohjeRydeKuva: ryde, ohjeKolikkoKuva: kolikot, ohjePalkintoKuva: palkinto };
   const valmiit = {};
 
   return {
@@ -2380,6 +2655,77 @@ function ilmoitaEtappi(e) {
   ilmoitusAjastin = setTimeout(() => el.classList.remove('nakyy'), 1900);
 }
 
+/* ---------- ensimmäisten juoksujen opastus ----------
+   Kolme liikettä, yksi kerrallaan: kaistanvaihto, hyppy ja kierähdys.
+   Vihje näkyy, kunnes pelaaja tekee liikkeen tai 7 s on kulunut. Opittu
+   liike muistetaan laitteella; opastus näytetään enintään kolmella
+   juoksulla, jottei se jää kiusaamaan pelaajaa, joka ei kierähdä koskaan.
+   Puhelimessa neuvotaan pyyhkäisy, hiirellä ja näppäimistöllä näppäimet. */
+const OPASTUS_AVAIN = 'liinarun.opastus';
+const NUOLI = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V5m-6 6 6-6 6 6"/></svg>';
+const SIVUNUOLI = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>';
+const OPASTUS = [
+  { liike: 'kaista', suunta: 'sivu', puhelin: ['PYYHKÄISE SIVULLE', 'vaihda kaistaa'], kone: ['<kbd>←</kbd><kbd>→</kbd>', 'vaihda kaistaa'] },
+  { liike: 'hyppy', suunta: 'ylos', puhelin: ['PYYHKÄISE YLÖS', 'hyppää matalan puomin yli'], kone: ['<kbd>↑</kbd><kbd>välilyönti</kbd>', 'hyppää matalan puomin yli'] },
+  { liike: 'kieri', suunta: 'alas', puhelin: ['PYYHKÄISE ALAS', 'kierähdä puomin ali'], kone: ['<kbd>↓</kbd>', 'kierähdä puomin ali'] }
+];
+const opastusEl = document.getElementById('opastus');
+const naytolla = matchMedia('(hover: hover) and (pointer: fine)');
+let opastus = (() => {
+  try { return JSON.parse(localStorage.getItem(OPASTUS_AVAIN)) || { opitut: [], kerrat: 0 }; }
+  catch { return { opitut: [], kerrat: 0 }; }
+})();
+const tallennaOpastus = () => { try { localStorage.setItem(OPASTUS_AVAIN, JSON.stringify(opastus)); } catch {} };
+let opastusJuoksu = false, opastusVaihe = null, opastusAika = 0, opastusTauko = 0;
+
+/* juoksun alkaessa: tällä juoksulla opastetaan, jos opittavaa on ja kertoja jäljellä */
+function aloitaOpastus() {
+  opastusJuoksu = opastus.kerrat < 3 && OPASTUS.some(o => !opastus.opitut.includes(o.liike));
+  if (opastusJuoksu) { opastus.kerrat++; tallennaOpastus(); }
+  piilotaOpastus(); opastusTauko = 0.6;
+}
+function piilotaOpastus() {
+  opastusVaihe = null;
+  opastusEl?.classList.remove('nakyy', 'opittu');
+}
+function naytaOpastus(o) {
+  if (!opastusEl) return;
+  const [kuva, teksti] = naytolla.matches ? o.kone : o.puhelin;
+  const k = opastusEl.querySelector('.opastus-kuva');
+  k.className = `opastus-kuva ${o.suunta}`;
+  k.innerHTML = naytolla.matches ? kuva
+    : o.suunta === 'sivu' ? SIVUNUOLI : o.suunta === 'ylos' ? NUOLI : NUOLI.replace('M12 20V5m-6 6 6-6 6 6', 'M12 4v15m-6-6 6 6 6-6');
+  opastusEl.querySelector('b').innerHTML = naytolla.matches ? teksti.toUpperCase() : kuva;
+  opastusEl.querySelector('small').textContent = naytolla.matches ? '' : teksti;
+  opastusEl.classList.remove('opittu');
+  opastusEl.classList.add('nakyy');
+  opastusVaihe = o; opastusAika = 0;
+}
+/* move/jump/roll kertovat tehdyn liikkeen */
+function opi(liike) {
+  if (!opastus.opitut.includes(liike)) { opastus.opitut.push(liike); tallennaOpastus(); }
+  if (opastusVaihe?.liike === liike) {
+    opastusEl.classList.add('opittu');
+    opastusVaihe = null; opastusTauko = 0.9;
+    setTimeout(() => { if (!opastusVaihe) opastusEl.classList.remove('nakyy'); }, 450);
+  }
+}
+/* joka ruudulla: seuraava vihje, kun edellinen on opittu tai vanhentunut */
+function paivitaOpastus(dt, kaynnissa) {
+  if (!opastusEl) return;
+  if (!kaynnissa) { if (opastusVaihe && (S.over || !S.started)) piilotaOpastus(); return; }
+  if (!opastusJuoksu) return;
+  if (opastusVaihe) {
+    opastusAika += dt;
+    if (opastusAika > 7) { opastusEl.classList.remove('nakyy'); opastusSeuraava = OPASTUS.indexOf(opastusVaihe) + 1; opastusVaihe = null; opastusTauko = 0.9; }
+    return;
+  }
+  if ((opastusTauko -= dt) > 0) return;
+  const seuraava = OPASTUS.slice(opastusSeuraava).find(o => !opastus.opitut.includes(o.liike));
+  if (seuraava) naytaOpastus(seuraava); else opastusJuoksu = false;
+}
+let opastusSeuraava = 0;
+
 /* Pelaajan tilillä olevat potkulaudat: jokainen juoksu alkaa niillä. */
 let varastoLaudat = 0;
 const S = {
@@ -2436,6 +2782,7 @@ function start() {
   S.started = true;
   S.lasku = LASKU;
   rakennaEtapit();
+  aloitaOpastus(); opastusSeuraava = 0;
   document.dispatchEvent(new CustomEvent('liina:alku'));
 }
 /* Rullaava maisema takaisin lähtöasemiin. Ilman tätä etusivulle
@@ -2473,6 +2820,7 @@ function reset() {
   S.started = true;
   S.lasku = LASKU;
   rakennaEtapit();
+  aloitaOpastus(); opastusSeuraava = 0;
   document.dispatchEvent(new CustomEvent('liina:alku'));
 }
 
@@ -2519,7 +2867,9 @@ function palaaEtusivulle() {
 const ohjattavissa = () => S.started && !S.over && !S.tauko && S.lasku <= 0;
 function move(dir) {
   if (!ohjattavissa()) return;
+  const ennen = S.lane;
   S.lane = Math.max(-1, Math.min(1, S.lane + dir));
+  if (S.lane !== ennen) opi('kaista');
 }
 function jump() {
   if (!ohjattavissa()) return;
@@ -2527,11 +2877,13 @@ function jump() {
   if (S.jumping) { S.hyppyPuskuri = performance.now(); return; }
   S.roll = 0;                      /* hyppy katkaisee kierähdyksen */
   S.jumping = true; S.vy = HYPPY_VY;
+  aani('hyppy'); opi('hyppy');
 }
 function roll() {
   if (!ohjattavissa() || S.roll > 0) return;
   if (S.jumping) S.vy = -22;       /* ilmassa: syöksy maahan ja kierähdys heti */
   S.roll = KIERI;
+  aani('kieri'); opi('kieri');
 }
 
 addEventListener('keydown', e => {
@@ -2589,7 +2941,9 @@ host.addEventListener('pointerup', e => {
   const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
   if (!touch.tehty) {
     const tap = Math.abs(dx) < 22 && Math.abs(dy) < 22;
-    if (tap) { if (!S.started) start(); else if (S.over) { if (S.kortti) reset(); } else jump(); }
+    /* loppukortin harmaa tausta vie päävalikkoon (valikko.js), joten
+       loppuruudun napautus ei enää aloita uutta juoksua */
+    if (tap) { if (!S.started) start(); else if (S.over) { if (S.kortti && !e.target.closest('#over')) reset(); } else jump(); }
     else pyyhkaisy(dx, dy);
   }
   touch = null;
@@ -2709,6 +3063,7 @@ function tick() {
     S.gap = Math.max(10.6, S.gap - dt * 0.06);
   }
   const v = S.started && !S.over && !laskee ? S.speed * (S.boost > 0 ? 1.5 : 1) : 0;
+  paivitaOpastus(dt, S.started && !S.over && !laskee && !S.tauko);
 
   /* etapit: paikka lasketaan suoraan matkasta, joten ne eivät ajelehdi */
   for (const e of ajo) {
@@ -3043,11 +3398,13 @@ function tick() {
         if (S.ride > 0) {
           /* potkulauta on lisäelämä: kyyti katkeaa, peli jatkuu */
           S.ride = 0; S.rideGrace = 1.2; S.shake = 0.3;
+          aani('kolahdus');
         } else {
           /* Kiinnijääminen: maailma pysähtyy, Liina horjahtaa, ruutu
              tärähtää ja jahtaaja juoksee kiinni. Loppukortti ja tuloksen
              tallennus tulevat hetken päästä, jotta tilanteen ehtii nähdä. */
           S.over = true; S.shake = 0.5; S.kaatui = 0; S.kortti = false;
+          aani('tormays');
           const seuraava = ajo.find(e => !e.ohitettu);
           loppuTiedot = {
             pisteet: Math.round(S.score), matka: Math.round(S.dist), kesto: +S.kesto.toFixed(2),
@@ -3180,5 +3537,5 @@ function tick() {
 }
 scene.add(sun.target);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => texRegistry.forEach(f => f()));
-window.__liina = { tauota, jatka, renderer, laatu, camera, scene, S, JAHTAAJAT, museo, get museoMalli() { return museoMalli; }, mascot, liina, tervis, cars, cans, coins, scoots, rideScoot, kaytaScootti, palaaEtusivulle, ASETELMA, puomit, roll, sijoitaPuomi, asetaTyyppi, PUOMI, liikeSlot, liikeMuodot, valitseLiike, oikeaSlot, oikeatMuodot };
+window.__liina = { tauota, jatka, respawnCar, renderer, laatu, camera, scene, S, JAHTAAJAT, museo, get museoMalli() { return museoMalli; }, mascot, liina, tervis, cars, cans, coins, scoots, rideScoot, kaytaScootti, palaaEtusivulle, ASETELMA, puomit, roll, sijoitaPuomi, asetaTyyppi, PUOMI, liikeSlot, liikeMuodot, valitseLiike, oikeaSlot, oikeatMuodot };
 tick();

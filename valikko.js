@@ -786,3 +786,31 @@ function paivitaVaalilaskurit() {
 paivitaVaalilaskurit();
 setInterval(paivitaVaalilaskurit, 1000);
 
+
+/* ---------------------------------------------------------------
+   Napautus ikkunan ulkopuolelle eli harmaalle taustalle palauttaa
+   edelliseen näkymään: asetukset, ohjeet ja tulostaulu sulkeutuvat,
+   loppukortista mennään päävalikkoon ja tauolta jatketaan juoksua
+   (lähtölaskennan kautta, kuten JATKA-napista). Ikkunan sisältö,
+   napit ja tulostaulun lista eivät sulje mitään.
+   Juuri avautunut näkymä ei reagoi hetkeen, jottei sama napautus,
+   joka sen avasi, tai juoksun lopun hätäinen pyyhkäisy sulje sitä heti.
+   --------------------------------------------------------------- */
+const ULKOPUOLELLE = [
+  [asetukset, () => suljeAsetukset(), 300],
+  [ohjeet, () => suljeOhjeet(), 300],
+  [taulu, () => suljeTaulu(), 300],
+  [over, () => el('kotiin').click(), 700],
+  [el('tauko'), () => el('jatka').click(), 300]
+];
+for (const [ruutu, takaisin, suoja] of ULKOPUOLELLE) {
+  let avattu = 0;
+  new MutationObserver(() => { if (!ruutu.classList.contains('pois')) avattu = performance.now(); })
+    .observe(ruutu, { attributes: true, attributeFilter: ['class'] });
+  ruutu.addEventListener('click', e => {
+    if (ruutu.classList.contains('pois') || performance.now() - avattu < suoja) return;
+    if (!todiste.classList.contains('pois')) return;
+    if (e.target.closest('.kortti, button, a, input, ol')) return;
+    takaisin();
+  });
+}

@@ -50,6 +50,12 @@ jahtaa takaa. Vastaan tulee autoja ja AGT-bussi.
 - Vauhti 20 → 31 m/s, ramppi 0.9/s (lokakuu 2026, Kallen pyynnöstä vaikeampi). Kaikki vaikeusluvut
   ovat `VAIKEUS`-oliossa liina-scene.js:ssä. Huippuvauhtia ei nosteta yli 31:n muuttamatta
   palvelimen nopeusrajaa (supabase.sql, matka ≤ kesto × 40 + 10). Hyppy vy 11.6, painovoima 32.
+- Ei umpikujia: kaikki autot ajavat samaa vauhtia (7 m/s maailmaa nopeammin), ja `respawnCar`
+  sijoittaa auton vain paikkaan, joka täyttää `ohitettava`-säännöt (ei kolmen kaistan seinää;
+  sivukaistan auto ehtii keskikaistan autoa ennen). Älä anna autoille eri nopeuksia: välit
+  muuttuisivat matkalla ja takuu katoaisi. Vaikeus kasvaa autovälin tihentyessä 3 000 m:n aikana.
+- Henkilöautot ovat Tesloja (`3dmallit/tesla_pakattu.glb`, venytetty katto 2,2 m hypyn yläpuolelle),
+  korin väri arvotaan `TESLA_VARIT`-listasta joka kerta kun auto tulee tielle. Bussi on AGT:n.
 - Tervis: gap 12.5 → 10.6 m (kameran takana ajon aikana), game overissa z 3.4.
 - Boosteri: NOCCO-tölkki, 4 s, ×1.5 vauhti, ×2 kolikot. Tölkki kallellaan 0.52 rad, pyörii 5.2 rad/s.
 - Matka maaliin 900 m.

@@ -12,7 +12,7 @@ Solmuhierarkia, nimet ja nivelet säilyvät. Kvantisoinnin purku siirtyy
 mesh-solmun matriisiin tasaisella skaalalla, jotta normaalit pysyvät oikein.
 Tarvitsee numpyn (pip install numpy).
 
---harvenna X poistaa osuuden X kolmioista isoista (yli 4 000 kolmiota),
+--harvenna X poistaa osuuden X kolmioista isoista (yli 20 000 kolmiota),
 pehmeästi varjostetuista ja kuviottomista osista, kuten hiuksista.
 Tasaisesti varjostettuja osia (terävät särmät) ei kosketa, koska
 harvennus pyöristäisi niiden särmät. Tarvitsee fast-simplification-paketin.
@@ -60,25 +60,52 @@ def mat_trs(n):
     return M
 
 
-def harvenna(P, idx, osuus):
+def harvenna(P, idx, osuus, nimi=''):
     """Pehmeän pinnan harvennus: yhdistää kärjet sijainnin mukaan,
     harventaa ja laskee pehmeät normaalit uudelleen. Palauttaa None,
     jos pinta on tasaisesti varjostettu tai liian pieni."""
     import fast_simplification
-    if len(idx) // 3 < 4000:
+    if len(idx) // 3 < 20000:            # pienissä osissa (kukat, remmit) säästö on mitätön ja riski suuri
         return None
     uniq, inv = np.unique(np.round(P.astype(np.float64), 6), axis=0, return_inverse=True)
     inv = inv.reshape(-1)
     if len(idx) / len(uniq) < 5:          # alle 5 kolmiota per kärki: särmikäs pinta
         return None
-    pts, faces = fast_simplification.simplify(uniq.astype(np.float32), inv[idx].reshape(-1, 3).astype(np.int32),
+    alku = inv[idx].reshape(-1, 3)
+    pts, faces = fast_simplification.simplify(uniq.astype(np.float32), alku.astype(np.int32),
                                               target_reduction=osuus)
     pts = pts.astype(np.float32); faces = faces.astype(np.int64)
     a, b, c = pts[faces[:, 0]], pts[faces[:, 1]], pts[faces[:, 2]]
     fn = np.cross(b - a, c - a)
+    # Laaduntarkistus: harvennus voi romauttaa ohuen putken (kameran remmi)
+    # tai yhdistää erilliset pinnat (hiuskiehkura ja mekko) kolmioilla, jotka
+    # ulottuvat tyhjän tilan yli. Siksi (1) pinta-ala ei saa muuttua yli 3 %
+    # ja (2) jokaisen uuden kolmion keskipisteen ja särmien keskipisteiden
+    # sekä kärkipisteiden on oltava alkuperäisen pinnan lähellä: lähimmän alkuperäisen kolmion
+    # näytepisteen etäisyys saa olla enintään 0,75 × sen kolmion pisin särmä
+    # (+ 0,3 % mallin koosta). Muuten osa jätetään harventamatta.
+    from scipy.spatial import cKDTree
+    U = uniq.astype(np.float64)
+    ua, ub, uc = U[alku[:, 0]], U[alku[:, 1]], U[alku[:, 2]]
+    ala0 = np.linalg.norm(np.cross(ub - ua, uc - ua), axis=1).sum()
+    ala1 = np.linalg.norm(fn.astype(np.float64), axis=1).sum()
+    pisin0 = np.max([np.linalg.norm(ub - ua, axis=1), np.linalg.norm(uc - ub, axis=1),
+                     np.linalg.norm(ua - uc, axis=1)], axis=0)
+    naytteet = np.vstack([(ua + ub + uc) / 3, (ua + ub) / 2, (ub + uc) / 2, (uc + ua) / 2, U])
+    koot = np.concatenate([pisin0] * 4 + [np.zeros(len(U))])
+    A, B, C = a.astype(np.float64), b.astype(np.float64), c.astype(np.float64)
+    kokeet = np.vstack([(A + B + C) / 3, (A + B) / 2, (B + C) / 2, (C + A) / 2, pts.astype(np.float64)])
+    etaisyys, lahin = cKDTree(naytteet).query(kokeet)
+    diag = np.linalg.norm(U.max(0) - U.min(0))
+    ylitys = etaisyys - (0.75 * koot[lahin] + 0.003 * diag)
+    if abs(ala1 / max(ala0, 1e-12) - 1) > 0.03 or ylitys.max() > 0:
+        print(f'  {nimi}: harvennus hylätty: ala {ala1 / max(ala0, 1e-12):.3f}, '
+              f'irrallaan {(ylitys > 0).sum()} pistettä, pahin {etaisyys[ylitys.argmax()] / diag:.1%} mallin koosta')
+        return None
     vn = np.zeros_like(pts)
     for k in range(3): np.add.at(vn, faces[:, k], fn)
     vn /= np.maximum(np.linalg.norm(vn, axis=1, keepdims=True), 1e-12)
+    print(f'  {nimi}: harvennettu {len(idx) // 3} -> {len(faces)} kolmiota, pahin poikkeama {etaisyys[ylitys.argmax()] / diag:.1%}')
     return pts, vn.astype(np.float32), faces.reshape(-1)
 
 
@@ -105,6 +132,7 @@ def pakkaa(src, dst, harvennus=0.0):
 
     ennen_v = jalkeen_v = 0
     mesh_dq = {}
+    solmun_nimi = {n['mesh']: n.get('name', '') for n in j['nodes'] if 'mesh' in n}
     for mi, mesh in enumerate(j['meshes']):
         # yhteinen purku meshin kaikille primitiiveille
         kaikki = [accessor(j, binb, p['attributes']['POSITION']) for p in mesh['primitives']]
@@ -122,7 +150,7 @@ def pakkaa(src, dst, harvennus=0.0):
             aine = j['materials'][p['material']] if 'material' in p else {}
             kuvio = 'baseColorTexture' in aine.get('pbrMetallicRoughness', {})
             if harvennus > 0 and N is not None and not kuvio:
-                tulos = harvenna(P, idx, harvennus)
+                tulos = harvenna(P, idx, harvennus, mesh.get('name') or solmun_nimi.get(mi) or f'mesh {mi}')
                 if tulos is not None:
                     P, N, idx = tulos
                     UV = None              # kuvioton materiaali ei tarvitse tekstuurikoordinaatteja
