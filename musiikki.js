@@ -1,26 +1,5 @@
-/* ---------------------------------------------------------------
-   Taustamusiikki ja äänitehosteet
-
-   Selaimet eivät anna äänen alkaa itsestään, joten musiikki käynnistyy
-   ensimmäisestä kosketuksesta tai näppäimen painalluksesta. Se soi
-   silmukkana etusivulla ja juoksussa, hiljenee loppukortin ajaksi ja
-   pysähtyy, kun sovellus menee taustalle. Valinta (päällä/pois) säilyy
-   laitteella. AAC on noin puolet MP3:n koosta; MP3 on varalla selaimille,
-   jotka eivät toista AAC:tä.
-
-   Voimakkuutta säädetään Web Audion vahvistimella, koska iPhonen Safari
-   ei anna muuttaa audio-elementin omaa voimakkuutta.
-
-   Äänitehosteet (kolikon kilahdus, NOCCOn swoosh, renkaan vinkuna, hyppy,
-   kierähdys, kiinnijääminen ja potkulaudan menetys) syntetisoidaan Web
-   Audiolla. Ainoa tiedosto on NOCCO-tölkin avausääni
-   (aanet/tolkki.m4a, 13 kt), joka puretaan muistiin valmiiksi, jotta se
-   soi heti poimittaessa. liina-scene.js pyytää ääniä tapahtumalla
-   'liina:aani'. Tehosteilla on oma valinta.
-   --------------------------------------------------------------- */
-
 const AVAIN = 'liinarun.musiikki';
-const VOIMAKKUUS = 0.3, HILJAINEN = 0.12;      /* musiikki jää tehosteiden alle */
+const VOIMAKKUUS = 0.3, HILJAINEN = 0.12;
 
 const aani = new Audio();
 aani.src = aani.canPlayType('audio/mp4; codecs="mp4a.40.2"') ? 'aanet/musiikki.m4a' : 'aanet/musiikki.mp3';
@@ -32,8 +11,6 @@ let kayttajaAloitti = false;
 let tavoite = VOIMAKKUUS;
 let ctx = null, vahvistin = null, tehosteVahvistin = null;
 
-/* Web Audio luodaan vasta käyttäjän eleestä, kuten selaimet vaativat.
-   Sama konteksti palvelee musiikkia ja tehosteita. */
 function luoKonteksti() {
   if (ctx) return;
   const AC = window.AudioContext || window.webkitAudioContext;
@@ -45,7 +22,6 @@ function luoKonteksti() {
   lataaTolkki();
 }
 
-/* tölkin avausääni puretaan valmiiksi; AAC, ja varalla WAV */
 let tolkkiPuskuri = null;
 async function lataaTolkki() {
   for (const tiedosto of ['aanet/tolkki.m4a', 'aanet/tolkki.wav']) {
@@ -65,7 +41,6 @@ function audioKaytossa() {
   ctx.createMediaElementSource(aani).connect(vahvistin).connect(ctx.destination);
 }
 
-/* pehmeä voimakkuuden muutos, ettei ääni naksahda */
 function liu_uta(kohde) {
   tavoite = kohde;
   if (vahvistin) vahvistin.gain.setTargetAtTime(kohde, ctx.currentTime, 0.25);
@@ -93,10 +68,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) aani.pause(); else soita();
 });
 
-/* loppukortin ajan hiljempaa, juoksun alkaessa taas täysillä */
 document.addEventListener('liina:loppu', () => liu_uta(HILJAINEN));
 document.addEventListener('liina:alku', () => liu_uta(VOIMAKKUUS));
-/* loppukortista etusivulle koti-napilla */
 document.getElementById('kotiin')?.addEventListener('click', () => liu_uta(VOIMAKKUUS));
 
 const nappi = document.getElementById('musiikkiNappi');
@@ -116,8 +89,6 @@ nappi?.addEventListener('click', e => {
 });
 piirra();
 
-/* ---------- äänitehosteet ---------- */
-
 const TEHOSTE_AVAIN = 'liinarun.tehosteet';
 let tehosteet = (() => { try { return localStorage.getItem(TEHOSTE_AVAIN) !== 'pois'; } catch { return true; } })();
 let kohina = null;
@@ -130,14 +101,12 @@ function kohinaPuskuri() {
   return kohina;
 }
 
-/* verhokäyrä: nopea nousu, eksponentiaalinen vaimeneminen */
 function verho(g, t, huippu, nousu, kesto) {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(huippu, t + nousu);
   g.gain.exponentialRampToValueAtTime(0.0001, t + kesto);
 }
 
-/* kolikko: kaksi kirkasta nousevaa säveltä, sävelkorkeus vaihtelee hieman */
 function kilahdus() {
   const t = ctx.currentTime, k = 1 + (Math.random() - 0.5) * 0.04;
   [[1318.5, 0], [1975.5, 0.055]].forEach(([f, viive]) => {
@@ -150,7 +119,6 @@ function kilahdus() {
   });
 }
 
-/* NOCCO: kohinan läpi nouseva ja laskeva kaistanpäästösuodin */
 function swoosh() {
   const t = ctx.currentTime;
   const lahde = ctx.createBufferSource();
@@ -166,8 +134,6 @@ function swoosh() {
   lahde.start(t); lahde.stop(t + 0.6);
 }
 
-/* Ryde: kaksi vinoa sahalaitaa kapean suotimen läpi, sävel liukuu alas ja
-   värisee kuin renkaan kirskunta; mukana hieman kumista kohinaa */
 function rengas() {
   const t = ctx.currentTime, kesto = 0.6;
   const suodin = ctx.createBiquadFilter();
@@ -196,7 +162,6 @@ function rengas() {
   hiss.start(t); hiss.stop(t + kesto);
 }
 
-/* NOCCO: tölkki aukeaa ja perään suhahtaa boosti */
 function tolkki() {
   if (!tolkkiPuskuri) return;
   const lahde = ctx.createBufferSource(), g = ctx.createGain();
@@ -210,7 +175,6 @@ function nocco() {
   setTimeout(() => { try { swoosh(); } catch {} }, tolkkiPuskuri ? 140 : 0);
 }
 
-/* hyppy: lyhyt nouseva pomppu */
 function hyppy() {
   const t = ctx.currentTime;
   for (const [tyyppi, kerroin, huippu] of [['triangle', 1, 0.16], ['sine', 2, 0.05]]) {
@@ -224,7 +188,6 @@ function hyppy() {
   }
 }
 
-/* kierähdys: alaspäin liukuva suhahdus ja pehmeä tömähdys maahan */
 function kieri() {
   const t = ctx.currentTime;
   const lahde = ctx.createBufferSource();
@@ -245,7 +208,6 @@ function kieri() {
   o.start(t); o.stop(t + 0.16);
 }
 
-/* matala tömähdys: törmäyksen ja kolahduksen pohja */
 function tomahdys(t, voima, kesto) {
   const o = ctx.createOscillator(), g = ctx.createGain();
   o.frequency.setValueAtTime(115, t);
@@ -261,7 +223,6 @@ function tomahdys(t, voima, kesto) {
   lahde.start(t); lahde.stop(t + kesto);
 }
 
-/* kiinnijääminen: tömähdys ja perään laskeva kaksisävelinen "voi ei" */
 function tormays() {
   const t = ctx.currentTime;
   tomahdys(t, 1, 0.42);
@@ -280,7 +241,6 @@ function tormays() {
   });
 }
 
-/* potkulauta menetetään mutta juoksu jatkuu: kevyempi metallinen kolahdus */
 function kolahdus() {
   const t = ctx.currentTime;
   tomahdys(t, 0.55, 0.22);
@@ -314,12 +274,7 @@ tehosteNappi?.addEventListener('click', e => {
   tehosteet = !tehosteet;
   try { localStorage.setItem(TEHOSTE_AVAIN, tehosteet ? 'paalla' : 'pois'); } catch {}
   luoKonteksti();
-  if (tehosteet) { ctx?.resume().catch(() => {}); kilahdus(); }     /* esimakuna kilahdus */
+  if (tehosteet) { ctx?.resume().catch(() => {}); kilahdus(); }
   piirraTehosteet();
 });
 piirraTehosteet();
-
-/* testausta varten, kuten window.__liina */
-window.__musiikki = { aani, get gain() { return vahvistin ? vahvistin.gain.value : aani.volume; },
-  get paalla() { return paalla; }, get tehosteet() { return tehosteet; }, get ctx() { return ctx; },
-  get tehosteVahvistin() { return tehosteVahvistin; } };

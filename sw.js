@@ -1,22 +1,4 @@
-/* ---------------------------------------------------------------
-   Liinarun – välimuisti (service worker)
-
-   Raskaat ja muuttumattomat tiedostot haetaan välimuistista, jolloin
-   peli aukeaa toisella kerralla heti ja säästää puhelimen dataa:
-     - 3D-mallit (.glb): osoitteessa on versio (?v=…), joten uusi malli
-       saa uuden osoitteen ja haetaan verkosta
-     - musiikki ja kuvat: uusi versio tarvitsee uuden tiedostonimen
-     - three.js ja supabase-js CDN:stä: osoitteessa on kiinteä versio
-     - fontit
-   Sivu itse ja pelin oma koodi haetaan aina ensin verkosta, jotta
-   päivitykset näkyvät heti; välimuistia käytetään vain ilman yhteyttä.
-   Supabasen pyyntöjä (tulokset, kirjautuminen) ei tallenneta koskaan.
-
-   Kun tämän tiedoston toimintaa muutetaan, nosta VERSIO: vanha
-   välimuisti poistetaan uuden asentuessa.
-   --------------------------------------------------------------- */
-
-const VERSIO = 'liinarun-v2';
+const VERSIO = 'liinarun-v3';
 
 const PYSYVA = [
   /\.glb(\?|$)/,
@@ -44,17 +26,15 @@ async function valimuistista(pyynto) {
   return vastaus;
 }
 
-/* Pelin oma koodi ja sivu: palvelimelta aina tarkistaen (no-cache), ei
-   selaimen HTTP-välimuistista. Muuten julkaisun jälkeen uusi sivu voi saada
-   vanhan skriptin, jolloin esim. uudet napit eivät toimi. Muuttumaton
-   tiedosto ei siirry uudelleen, vaan palvelin vastaa 304. */
 async function verkostaEnsin(pyynto) {
   const muisti = await caches.open(VERSIO);
   try {
-    /* sivunavigoinnin pyyntöä ei voi kopioida uusilla asetuksilla, joten
-       sivu haetaan osoitteella */
     const vastaus = await fetch(pyynto.mode === 'navigate' ? pyynto.url : pyynto, { cache: 'no-cache' });
-    if (vastaus.ok) muisti.put(pyynto, vastaus.clone());
+    if (pyynto.mode === 'navigate' && vastaus.redirected) {
+      if (new URL(vastaus.url).origin !== self.location.origin) self.registration.unregister();
+      return Response.redirect(vastaus.url, 301);
+    }
+    if (vastaus.ok && !vastaus.redirected) muisti.put(pyynto, vastaus.clone());
     return vastaus;
   } catch (virhe) {
     const loytyi = await muisti.match(pyynto);
@@ -67,7 +47,7 @@ self.addEventListener('fetch', e => {
   const pyynto = e.request;
   if (pyynto.method !== 'GET') return;
   const url = pyynto.url;
-  if (/\.supabase\.co\//.test(url)) return;                    /* tulokset ja tili aina verkosta */
+  if (/\.supabase\.co\//.test(url)) return;
   if (PYSYVA.some(r => r.test(url))) { e.respondWith(valimuistista(pyynto)); return; }
   if (new URL(url).origin === self.location.origin || /^https:\/\/fonts\.googleapis\.com\//.test(url)) {
     e.respondWith(verkostaEnsin(pyynto));

@@ -1,20 +1,5 @@
-/* ---------------------------------------------------------------
-   Päävalikko ja tulostaulu
-
-   Päävalikko näyttää pelaajan nimimerkin ja ennätyksen, ja siitä
-   pääsee peliin tai tulostauluun. Tulostaulu näyttää kärki 10:n
-   sinisellä ja pelaajan oman rivin oranssilla. Jos oma sija on
-   kärjen ulkopuolella, se tulee yhdenneksitoista riviksi.
-
-   Tulostaulun ollessa auki <body> kantaa luokkaa "taulu-auki", jolloin
-   liina-scene.js ei käynnistä peliä välilyönnistä.
-   --------------------------------------------------------------- */
-
 import { pelaaja, asetaTili, tunnus, omaPin, rpc, viesti, kirjauduUlos, SUPABASE_URL, SUPABASE_KEY } from './verkko.js';
 
-/* Realtime-yhteyteen tarvitaan Supabasen kirjasto. Se ladataan vasta kun
-   tulostaulu avataan, joten peli käynnistyy yhtä nopeasti kuin ennenkin
-   eikä kaadu, vaikka CDN ei vastaisi. Versio on kiinnitetty. */
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/+esm';
 
 const el = id => document.getElementById(id);
@@ -25,7 +10,6 @@ const lista = el('tauluLista');
 const tauluTila = el('tauluTila');
 const fi = n => Number(n).toLocaleString('fi-FI');
 
-/* ---------- päävalikon pelaajarivi ---------- */
 export function paivitaKuka() {
   if (!pelaaja.nimimerkki) { el('kuka').hidden = true; return; }
   el('kuka').hidden = false;
@@ -39,13 +23,11 @@ export function paivitaKuka() {
 document.addEventListener('liina:tunnistettu', paivitaKuka);
 paivitaKuka();
 
-/* ---------- tulostaulu ---------- */
 function rivi({ sija, nimimerkki, paras, oma }) {
   const li = document.createElement('li');
   if (oma) li.classList.add('oma');
   const mitali = sija <= 3;
   if (mitali) li.classList.add('mitali', `mitali-${sija}`);
-  /* mitalin sisällä pelkkä numero, muilla rivin tapaan piste perässä */
   for (const [luokka, teksti] of [['sija', mitali ? `${sija}` : `${sija}.`], ['nimi', nimimerkki], ['pisteet', `${fi(paras)} m`]]) {
     const s = document.createElement('span');
     s.className = luokka;
@@ -55,20 +37,18 @@ function rivi({ sija, nimimerkki, paras, oma }) {
   return li;
 }
 
-let edelliset = new Map();       /* nimimerkki → pisteet edellisessä piirrossa */
+let edelliset = new Map();
 
 function piirra(rivit) {
   const vanhat = edelliset;
   edelliset = new Map(rivit.map(r => [r.nimimerkki, r.paras]));
-  const korosta = vanhat.size > 0;  /* ensimmäinen piirto ei välähdä */
+  const korosta = vanhat.size > 0;
   lista.replaceChildren();
   if (!rivit.length) {
     tauluTila.textContent = 'Ei vielä tuloksia. Ensimmäinen juoksu nousee kärkeen.';
     return;
   }
   rivit.forEach((r, i) => {
-    /* Palvelin palauttaa kärki 10:n ja oman rivin perään, jos se jää
-       kärjen ulkopuolelle. Väliin tulee erotin. */
     if (i === 10) {
       const vali = document.createElement('li');
       vali.className = 'vali';
@@ -97,15 +77,8 @@ export async function haeTaulu() {
   }
 }
 
-/* Tulostaulu avataan joko päävalikosta tai juoksun lopusta, ja
-   TAKAISIN palaa siihen ruutuun, josta tultiin. */
 let paluu = intro;
 
-/* ---------- reaaliaikaisuus ----------
-   Peli tilaa tulostaulu_versio-rivin muutokset. Rivi päivittyy
-   tietokannassa aina kun jonkun ennätys muuttuu, ja silloin tulostaulu
-   haetaan uudelleen. Useat peräkkäiset muutokset niputetaan yhdeksi
-   hauksi. */
 let kanava = null;
 let kirjasto = null;
 let ajastin = null;
@@ -128,11 +101,9 @@ async function tilaa() {
       .channel('tulostaulu')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tulostaulu_versio' }, haeViiveella)
       .subscribe(tila => {
-        /* yhteyden palatessa haetaan varmuuden vuoksi, jottei välissä tullut muutos jää näkymättä */
         if (tila === 'SUBSCRIBED') haeViiveella();
       });
   } catch {
-    /* Ilman Realtimea tulostaulu toimii silti: se päivittyy avattaessa. */
   }
 }
 
@@ -142,7 +113,6 @@ function lopetaTilaus() {
   kanava = null;
 }
 
-/* Puhelin voi katkaista yhteyden taustalla; palatessa haetaan tuore tilanne. */
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && document.body.classList.contains('taulu-auki')) haeViiveella();
 });
@@ -167,15 +137,10 @@ export function suljeTaulu() {
   document.body.classList.remove('taulu-auki');
 }
 
-/* Fokus poistetaan napista klikkauksen jälkeen. Muuten välilyönti, jolla
-   peli aloitetaan, painaisi samalla fokusoitua nappia ja avaisi
-   tulostaulun käynnissä olevan pelin päälle. */
 el('avaaTaulu').addEventListener('click', e => { e.currentTarget.blur(); avaaTaulu(intro); });
-/* Palautteesta suoraan päävalikkoon. Peli jää odottamaan: PELAA tai
-   välilyönti aloittaa uuden juoksun tavalliseen tapaan. */
 el('kotiin').addEventListener('click', e => {
   e.currentTarget.blur();
-  if (window.__liina) window.__liina.palaaEtusivulle();
+  document.dispatchEvent(new CustomEvent('liina:etusivulle'));
   document.body.classList.remove('loppu');
   document.body.classList.add('valikossa');
   over.style.opacity = '0';
@@ -190,13 +155,6 @@ addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.body.classList.contains('taulu-auki')) suljeTaulu();
 });
 
-/* ---------------------------------------------------------------
-   Juoksun loppu: tallennus ja ennätysilmoitus
-   --------------------------------------------------------------- */
-
-/* Lähettämättömät juoksut. Jokaisen juoksun kolikot ja potkulaudat
-   kuuluvat tilille, joten jonossa pidetään kaikki (enintään 30), ei vain
-   parasta. Vanhempi versio tallensi yhden tuloksen oliona. */
 const JONO_AVAIN = 'liinarun.jonossa';
 const JONO_MAX = 30;
 const jono = {
@@ -216,7 +174,6 @@ function naytaLoppu(tulos, ennatys) {
   if (ennatys) {
     el('overOtsikko').textContent = `${fi(tulos.matka)}\u00a0m`;
     el('overText').textContent = `${tulos.jahtaaja || 'Tervis'} sai kiinni`;
-    /* animaatio alkaa alusta jokaisella ennätyksellä */
     const o = el('overOtsikko'); o.style.animation = 'none'; void o.offsetWidth; o.style.animation = '';
   } else {
     el('overOtsikko').textContent = (tulos.jahtaaja || 'Tervis').toUpperCase();
@@ -226,9 +183,8 @@ function naytaLoppu(tulos, ennatys) {
   el('overLuku').textContent = fi(tulos.matka);
 }
 
-/* "Ohitit 3 etappia · TOP 10:een puuttui 84 m (Sarra95)" */
 function etappiRivi(e) {
-  if (!e) return '';
+  if (!e || kisaPaattynyt()) return '';
   const osat = [];
   if (e.ohitettu > 0) osat.push(`Ohitit ${e.ohitettu} ${e.ohitettu === 1 ? 'etapin' : 'etappia'}`);
   if (e.seuraava) {
@@ -246,19 +202,19 @@ function etappiRivi(e) {
 }
 
 function tilaRivi(v) {
+  if (v.tulostaulu_suljettu || kisaPaattynyt()) {
+    return v.sija ? `Tulostaulu on suljettu · lopullinen sijasi ${v.sija}` : 'Tulostaulu on suljettu';
+  }
   if (v.uusi_ennatys) {
     return v.edellinen > 0 ? `Sija ${v.sija} · aiempi ennätys ${fi(v.edellinen)} m` : `Sija ${v.sija}`;
   }
   return `Ennätyksesi ${fi(v.paras)} m · sija ${v.sija}`;
 }
 
-/* Juoksun etapit: muiden pelaajien tulokset tietyillä sijoilla ja oma
-   ennätys. Haetaan kun laite tunnistetaan ja jokaisen tallennuksen
-   jälkeen, jotta seuraava juoksu alkaa tuoreilla tavoitteilla. Ilman
-   yhteyttä käytetään viimeksi haettuja ja paikallista ennätystä. */
 let etapit = [];
 function kerroTavoitteet() {
-  document.dispatchEvent(new CustomEvent('liina:tavoitteet', { detail: { oma: pelaaja.paras, etapit } }));
+  const detail = kisaPaattynyt() ? { oma: 0, etapit: [] } : { oma: pelaaja.paras, etapit };
+  document.dispatchEvent(new CustomEvent('liina:tavoitteet', { detail }));
 }
 async function haeTavoitteet() {
   try {
@@ -284,10 +240,8 @@ async function tallenna(tulos) {
   return v;
 }
 
-/* Juoksun vaikutus tiliin heti, ennen palvelimen vastausta: seuraava
-   juoksu alkaa oikeilla laudoilla, vaikka yhteys olisi poikki. */
 function kirjaaPaikallisesti(tulos) {
-  if (tulos.matka > pelaaja.paras) { pelaaja.paras = tulos.matka; kerroTavoitteet(); }
+  if (tulos.matka > pelaaja.paras && !kisaPaattynyt()) { pelaaja.paras = tulos.matka; kerroTavoitteet(); }
   asetaTili({
     kolikot: pelaaja.kolikot + (tulos.kolikot || 0),
     potkulaudat: Math.min(5, Math.max(0,
@@ -303,10 +257,7 @@ document.addEventListener('liina:loppu', async e => {
   document.body.classList.add('loppu');
   const tulos = e.detail;
   const nro = ++loppuNro;
-  /* Ennätys päätetään heti tunnetun ennätyksen perusteella, jotta ruutu
-     ei vaihdu kesken lukemisen. Palvelimen vastaus voittaa, jos toinen
-     laite on ehtinyt parantaa ennätystä sillä välin. */
-  const arvio = tulos.matka > pelaaja.paras;
+  const arvio = tulos.matka > pelaaja.paras && !kisaPaattynyt();
   naytaLoppu(tulos, arvio);
   el('overKolikot').textContent = tulos.kolikot > 0 ? `+${fi(tulos.kolikot)} kolikkoa tilille` : '';
   el('overEtappi').innerHTML = etappiRivi(tulos.etapit);
@@ -314,7 +265,6 @@ document.addEventListener('liina:loppu', async e => {
   kirjaaPaikallisesti(tulos);
 
   try {
-    /* jonossa olevat ensin, jotta tilin luvut kulkevat oikeassa järjestyksessä */
     if (jono.hae().length) {
       jono.lisaa(tulos);
       await puraJono();
@@ -329,8 +279,6 @@ document.addEventListener('liina:loppu', async e => {
     el('overTila').textContent = tilaRivi(v);
   } catch (err) {
     if (err.koodi === 'EI_YHTEYTTA') {
-      /* Tulos jää laitteelle ja lähetetään, kun peli seuraavan kerran
-         saa yhteyden. Jonossa pidetään vain paras lähettämätön tulos. */
       jono.lisaa(tulos);
       if (arvio) { pelaaja.paras = tulos.matka; paivitaKuka(); }
       if (nro === loppuNro) el('overTila').textContent = 'Ei yhteyttä. Tulos tallennetaan, kun yhteys palaa.';
@@ -342,10 +290,6 @@ document.addEventListener('liina:loppu', async e => {
   }
 });
 
-/* Lähettämättömät juoksut lähetetään vanhimmasta alkaen. Palvelin
-   hyväksyy tallennuksen enintään 1,5 sekunnin välein, joten väliin
-   odotetaan hetki. Hylätty juoksu ei parane uudella yrityksellä ja
-   poistetaan; verkkovirheessä loput jäävät odottamaan seuraavaa kertaa. */
 let purkamassa = false;
 async function puraJono() {
   if (purkamassa) return;
@@ -369,18 +313,12 @@ async function puraJono() {
 }
 document.addEventListener('liina:tunnistettu', puraJono);
 
-/* ---------------------------------------------------------------
-   Asetukset: nimimerkki, ennätys ja uloskirjautuminen
-   --------------------------------------------------------------- */
-
 const asetukset = el('asetukset');
 let ulosVahvistus = false;
 
-/* Pitkä nimimerkki (enintään 16 merkkiä) pienennetään mahtumaan korttiin
-   vieressä olevan todistenapin kanssa. Mitataan vasta, kun kortti näkyy. */
 function sovitaAsetusNimi() {
   const n = el('asetusNimi');
-  const tila = n.closest('.kortti').clientWidth - 44 - 40;   /* reunat ja nappi */
+  const tila = n.closest('.kortti').clientWidth - 44 - 40;
   let koko = 24;
   n.style.fontSize = koko + 'px';
   while (n.scrollWidth > tila && koko > 14) { koko -= 1; n.style.fontSize = koko + 'px'; }
@@ -411,7 +349,6 @@ async function avaaAsetukset() {
   document.body.classList.add('asetukset-auki');
   asetukset.classList.remove('pois');
   asetukset.style.opacity = '1';
-  /* tuore sija palvelimelta; näkyy heti kun vastaus tulee */
   try {
     const t = await rpc('oma_tila', { p_tunnus: tunnus() });
     pelaaja.paras = t.paras; pelaaja.sija = t.sija;
@@ -430,7 +367,6 @@ el('avaaAsetukset').addEventListener('click', e => { e.currentTarget.blur(); ava
 el('suljeAsetukset').addEventListener('click', e => { e.currentTarget.blur(); suljeAsetukset(); });
 el('kirjauduUlos').addEventListener('click', async e => {
   e.currentTarget.blur();
-  /* ensimmäinen painallus varoittaa, toinen kirjaa ulos */
   if (!ulosVahvistus) {
     ulosVahvistus = true;
     el('ulosVaroitus').hidden = false;
@@ -450,16 +386,10 @@ addEventListener('keydown', e => {
   else if (document.body.classList.contains('ohjeet-auki')) suljeOhjeet();
 });
 
-/* ---------------------------------------------------------------
-   Kauppa: etusivun Kauppa-napista. liina-scene.js hoitaa kameran ja
-   Liinan siirtymän; tässä vaihdetaan näkymät ja haetaan tilin tiedot.
-   Etusivu palaa näkyviin vasta, kun kamera on ehtinyt melkein takaisin.
-   --------------------------------------------------------------- */
-
 const kauppa = el('kauppa');
 let kauppaAjastin = null;
-let katalogi = null;          /* palvelimen jahtaajat: hinta, saatavuus, omistus */
-let kohdalla = 'tervis';      /* ringin etupaikalla oleva */
+let katalogi = null;
+let kohdalla = 'tervis';
 let ostoVahvistus = false, kauppaKesken = false, kauppaVirhe = '';
 
 const KOLIKKO = '<i class="kolikko-ikoni" aria-hidden="true"></i>';
@@ -498,7 +428,6 @@ function piirraKauppa() {
   }
 }
 
-/* toinen pelaaja kirjautui: omistukset haetaan uudelleen */
 document.addEventListener('liina:tunnistettu', () => { katalogi = null; });
 
 document.addEventListener('liina:rinki-kohdalla', e => {
@@ -512,7 +441,6 @@ el('kauppaToiminto').addEventListener('click', async e => {
   const j = katalogi && katalogi.find(k => k.id === kohdalla);
   if (!j || kauppaKesken) return;
   kauppaVirhe = '';
-  /* ostossa ensimmäinen painallus pyytää vahvistuksen, toinen ostaa */
   if (!j.omistettu && !ostoVahvistus) { ostoVahvistus = true; piirraKauppa(); return; }
   kauppaKesken = true; piirraKauppa();
   try {
@@ -523,7 +451,6 @@ el('kauppaToiminto').addEventListener('click', async e => {
     paivitaKuka();
   } catch (err) {
     kauppaVirhe = viesti(err.koodi);
-    /* saldo on voinut muuttua toisella laitteella: haetaan tuore tila */
     haeKatalogi();
   } finally {
     kauppaKesken = false; ostoVahvistus = false;
@@ -553,7 +480,6 @@ async function avaaKauppa() {
   ostoVahvistus = false; kauppaVirhe = '';
   if (katalogi === false) katalogi = null;
   piirraKauppa();
-  /* otsikko ja napit tulevat esiin, kun kamera on kääntynyt jahtaajaan */
   kauppaAjastin = setTimeout(() => { kauppa.classList.remove('pois'); kauppa.style.opacity = '1'; }, 900);
   haeKatalogi();
 }
@@ -571,7 +497,6 @@ function suljeKauppa() {
   }, 1300);
 }
 
-/* Ringin kierto: seuraava (→, pyyhkäisy vasemmalle) kiertää myötäpäivään. */
 const siirraRinkia = suunta => document.dispatchEvent(new CustomEvent('liina:rinki-siirto', { detail: { suunta } }));
 
 el('avaaKauppa').addEventListener('click', e => { e.currentTarget.blur(); avaaKauppa(); });
@@ -595,12 +520,6 @@ kauppa.addEventListener('pointerup', e => {
   if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) siirraRinkia(dx < 0 ? 1 : -1);
 });
 kauppa.addEventListener('pointercancel', () => { kauppaVeto = null; });
-
-/* ---------------------------------------------------------------
-   Ohjeet: etusivun leimasta aukeava korttipakka. Viisi ohjetta on
-   rivissä, ja niiden välillä liikutaan nuolinapeilla, pisteillä,
-   pyyhkäisemällä tai näppäimistön nuolilla.
-   --------------------------------------------------------------- */
 
 const ohjeet = el('ohjeet');
 const rata = ohjeet.querySelector('.ohjerata');
@@ -627,8 +546,6 @@ function naytaSivu(i, liuku = true) {
   el('ohjeSeuraava').disabled = sivu === sivut.length - 1;
 }
 
-/* Pyyhkäisy: kortti seuraa sormea, ja riittävän pitkä tai nopea veto
-   vaihtaa korttia. Pystysuuntainen veto jätetään kortin vieritykselle. */
 let veto = null;
 rata.addEventListener('pointerdown', e => {
   if (!e.isPrimary) return;
@@ -683,10 +600,6 @@ addEventListener('keydown', e => {
 el('avaaOhjeet').addEventListener('click', e => { e.currentTarget.blur(); avaaOhjeet(); });
 el('suljeOhjeet').addEventListener('click', e => { e.currentTarget.blur(); suljeOhjeet(); });
 
-/* ---------- todistenäkymä ----------
-   Näytetään vaalitiimille palkintoa lunastettaessa. Tiedot haetaan
-   palvelimelta avattaessa, ja kello juoksee sekunnin tarkkuudella, jotta
-   näkymä on elävä eikä vanha kuvakaappaus kelpaa sen sijaan. */
 const todiste = el('todiste');
 let kelloAjastin = null;
 const aika = (d, s = true) => d.toLocaleString('fi-FI', {
@@ -737,31 +650,11 @@ el('avaaTodiste').addEventListener('click', e => { e.currentTarget.blur(); avaaT
 el('suljeTodiste').addEventListener('click', e => { e.currentTarget.blur(); suljeTodiste(); });
 addEventListener('resize', () => { if (!todiste.classList.contains('pois')) sovitaNimi(); });
 
+const VAALIVIIKKO_PAATTYY = Date.parse('2026-11-20T12:00:00+02:00');
+const kisaPaattynyt = () => Date.now() >= VAALIVIIKKO_PAATTYY;
 
-/* ---------------------------------------------------------------
-   Vaaliviikon lähtölaskuri
-
-   Laskee aina kuluvan viikon perjantaihin klo 18 Suomen aikaa
-   (Europe/Helsinki laitteen aikavyöhykkeestä riippumatta). Perjantain
-   klo 18 jälkeen viikonlopun ajan laskurissa lukee, että viikko on
-   päättynyt; maanantaina laskenta alkaa uudelleen. Kellonsiirto osuu
-   aina sunnuntaille, joten maanantain ja perjantain välillä erotus
-   voidaan laskea suoraan Suomen seinäkellosta.
-   --------------------------------------------------------------- */
-
-const HELSINKI = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Europe/Helsinki', weekday: 'short', year: 'numeric', month: '2-digit',
-  day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
-});
-const VIIKONPAIVA = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
-
-function vaaliviikko(nyt = new Date()) {
-  const o = Object.fromEntries(HELSINKI.formatToParts(nyt).map(p => [p.type, p.value]));
-  const pv = VIIKONPAIVA[o.weekday];
-  /* Suomen seinäkello millisekunteina, ikään kuin UTC:nä */
-  const seina = Date.UTC(+o.year, +o.month - 1, +o.day, +o.hour, +o.minute, +o.second);
-  const perjantai18 = Date.UTC(+o.year, +o.month - 1, +o.day + (5 - pv), 18, 0, 0);
-  const jaljella = perjantai18 - seina;
+function vaaliviikko(nyt = Date.now()) {
+  const jaljella = VAALIVIIKKO_PAATTYY - nyt;
   return { jaljella, paattynyt: jaljella <= 0 };
 }
 
@@ -775,6 +668,10 @@ function muotoileJaljella(ms) {
 
 function paivitaVaalilaskurit() {
   const v = vaaliviikko();
+  if (v.paattynyt !== document.body.classList.contains('kisa-paattynyt')) {
+    document.body.classList.toggle('kisa-paattynyt', v.paattynyt);
+    if (v.paattynyt) kerroTavoitteet();
+  }
   for (const el of document.querySelectorAll('.vaalilaskuri')) {
     el.classList.toggle('paattynyt', v.paattynyt);
     el.querySelector('[data-vaali-otsikko]').textContent = v.paattynyt
@@ -786,16 +683,6 @@ function paivitaVaalilaskurit() {
 paivitaVaalilaskurit();
 setInterval(paivitaVaalilaskurit, 1000);
 
-
-/* ---------------------------------------------------------------
-   Napautus ikkunan ulkopuolelle eli harmaalle taustalle palauttaa
-   edelliseen näkymään: asetukset, ohjeet ja tulostaulu sulkeutuvat,
-   loppukortista mennään päävalikkoon ja tauolta jatketaan juoksua
-   (lähtölaskennan kautta, kuten JATKA-napista). Ikkunan sisältö,
-   napit ja tulostaulun lista eivät sulje mitään.
-   Juuri avautunut näkymä ei reagoi hetkeen, jottei sama napautus,
-   joka sen avasi, tai juoksun lopun hätäinen pyyhkäisy sulje sitä heti.
-   --------------------------------------------------------------- */
 const ULKOPUOLELLE = [
   [asetukset, () => suljeAsetukset(), 300],
   [ohjeet, () => suljeOhjeet(), 300],

@@ -1,34 +1,11 @@
-/* ---------------------------------------------------------------
-   Verkko: laitteen tunnistus ja nimimerkki
-
-   Laite saa nimimerkin rekisteröitymällä tai kirjautumalla PINillä.
-   Palvelin antaa laitteelle satunnaisen istuntotunnuksen, joka
-   tallennetaan selaimen muistiin. Seuraavilla avauksilla tunnus
-   riittää, eikä PINiä kysytä.
-
-   Ennen kuin laite on tunnistettu, <body> kantaa luokkaa
-   "tunnistamaton", ja liina-scene.js kieltäytyy käynnistämästä peliä.
-
-   Julkinen avain on tarkoitettu selaimeen. Sen oikeudet rajataan
-   Supabasen päässä: peli pääsee vain supabase.sql:n funktioihin.
-   Älä koskaan laita tähän service_role-avainta.
-   --------------------------------------------------------------- */
-
 const SUPABASE_URL = 'https://gqjuwjekplqmjtvgnxax.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_RElfJX6QhvX6tThW8xWJdA_78QpD_q9';
 const TUNNUS_AVAIN = 'liinarun.tunnus';
-/* PIN tallennetaan laitteelle vain, jotta pelaaja näkee sen asetuksista.
-   Palvelimella se on tiivisteenä, eikä sitä voi hakea sieltä takaisin. */
 const PIN_AVAIN = 'liinarun.pin';
-/* Viimeksi tällä laitteella pelannut nimimerkki: tervetulonäkymä tarjoaa
-   silloin ensisijaisesti kirjautumista ja täyttää nimen valmiiksi. */
 const EDELLINEN_AVAIN = 'liinarun.edellinen';
 
 document.body.classList.add('tunnistamaton');
 
-/* ---------- selaimen muisti ----------
-   Yksityisessä selaustilassa tai estetyillä evästeillä localStorage voi
-   heittää virheen. Silloin tunnus pysyy vain tämän välilehden ajan. */
 function muistipaikka(avain) {
   let vara = null;
   return {
@@ -41,7 +18,6 @@ const muisti = muistipaikka(TUNNUS_AVAIN);
 const pinMuisti = muistipaikka(PIN_AVAIN);
 const edellinenMuisti = muistipaikka(EDELLINEN_AVAIN);
 
-/* ---------- palvelinkutsut ---------- */
 class VerkkoVirhe extends Error {
   constructor(koodi) { super(koodi); this.koodi = koodi; }
 }
@@ -85,14 +61,11 @@ const VIESTIT = {
 };
 const viesti = koodi => VIESTIT[koodi] || 'Jokin meni vikaan. Yritä uudelleen.';
 
-/* ---------- tila ---------- */
 export const pelaaja = {
   nimimerkki: null, paras: 0, sija: null,
   kolikot: 0, potkulaudat: 0, jahtaaja: 'tervis'
 };
 
-/* Tilin tiedot tulevat palvelimelta usean funktion vastauksessa. Kentät,
-   joita vastauksessa ei ole, jätetään ennalleen. */
 export function asetaTili(tieto) {
   if (tieto.kolikot != null) pelaaja.kolikot = tieto.kolikot;
   if (tieto.potkulaudat != null) pelaaja.potkulaudat = tieto.potkulaudat;
@@ -109,7 +82,6 @@ function asetaPelaaja(tieto) {
   asetaTili(tieto);
 }
 
-/* ---------- näkymä ---------- */
 const el = id => document.getElementById(id);
 const ruutu = el('nimi');
 const intro = el('intro');
@@ -118,16 +90,13 @@ const kentta = { nimi: el('nimiKentta'), pin: el('pinKentta'), pin2: el('pin2Ken
 const virhe = el('nimiVirhe');
 const laheta = el('nimiLaheta');
 const vaihda = el('nimiVaihda');
-let tila = 'uusi';                          /* 'uusi' | 'vanha' */
+let tila = 'uusi';
 
 function naytaVirhe(koodi) {
   virhe.textContent = koodi ? viesti(koodi) : '';
   virhe.hidden = !koodi;
 }
 
-/* Nimimerkin ohje ja virheet näkyvät kentän alla. Sama sääntö kuin
-   palvelimella: 3–16 merkkiä, vähintään yksi kirjain tai numero.
-   Asiattomat sanat tarkistaa vain palvelin, koska lista on siellä. */
 const NIMI_OHJE = '3–16 merkkiä: kirjaimia, numeroita, välilyöntejä tai merkit _ . -';
 const nimiOhje = el('nimiKenttaOhje');
 function naytaNimiVirhe(koodi) {
@@ -143,8 +112,6 @@ function nimenVirhe(arvo) {
   return null;
 }
 naytaNimiVirhe(null);
-/* kirjoittaessa virhe poistuu heti kun nimi kelpaa; kielletyt merkit
-   näytetään heti, liian lyhyt vasta kun kentästä poistutaan */
 kentta.nimi.addEventListener('input', () => {
   const v = nimenVirhe(kentta.nimi.value);
   if (nimiOhje.classList.contains('virhe') || v === 'NIMI_MERKIT') naytaNimiVirhe(v);
@@ -167,8 +134,6 @@ function asetaTila(uusi) {
   naytaNimiVirhe(null);
 }
 
-/* Tervetulonäkymä: Liinarun, vaaliviikon kisa ja kaksi nappia. Jos laite
-   muistaa aiemman pelaajan, KIRJAUDU on ylempänä ja pääpainikkeena. */
 function naytaTervetulo() {
   const edellinen = edellinenMuisti.hae();
   const uusi = el('tervetuloUusi'), vanha = el('tervetuloVanha');
@@ -219,7 +184,6 @@ function paastaPeliin() {
   document.dispatchEvent(new CustomEvent('liina:tunnistettu', { detail: { ...pelaaja } }));
 }
 
-/* ---------- käynnistys ---------- */
 async function tunnista() {
   const tunnus = muisti.hae();
   if (!tunnus) { naytaTervetulo(); return; }
@@ -230,7 +194,6 @@ async function tunnista() {
     paastaPeliin();
   } catch (e) {
     if (e.koodi === 'ISTUNTO_VANHENTUNUT') {
-      /* Tunnus on poistettu palvelimelta, esim. pelaajan poiston jälkeen. */
       muisti.poista();
       pinMuisti.poista();
       naytaTervetulo();
@@ -263,7 +226,6 @@ lomake.addEventListener('submit', async e => {
     document.activeElement && document.activeElement.blur();
     paastaPeliin();
   } catch (err) {
-    /* nimimerkin virheet kentän alle, muut lomakkeen virhelaatikkoon */
     if (err.koodi && err.koodi.startsWith('NIMI')) { naytaNimiVirhe(err.koodi); kentta.nimi.focus(); }
     else { naytaVirhe(err.koodi); kentta.pin.focus(); }
   } finally {
@@ -280,18 +242,13 @@ el('tervetuloUusi').addEventListener('click', () => avaaLomake('uusi'));
 el('tervetuloVanha').addEventListener('click', () => avaaLomake('vanha'));
 el('nimiTakaisin').addEventListener('click', () => { naytaVirhe(null); naytaNimiVirhe(null); naytaTervetulo(); });
 
-/* PIN-kenttiin vain numeroita. */
 for (const k of [kentta.pin, kentta.pin2]) {
   k.addEventListener('input', () => { k.value = k.value.replace(/\D/g, '').slice(0, 4); });
 }
 
 export function tunnus() { return muisti.hae(); }
-/* null, jos laite on tunnistettu ennen kuin PIN alettiin tallentaa. */
 export function omaPin() { return pinMuisti.hae(); }
 
-/* Uloskirjautuminen. Palvelimelta yritetään poistaa tämän laitteen istunto,
-   mutta laite kirjataan ulos joka tapauksessa: jos funktiota ei vielä ole
-   tietokannassa tai verkkoa ei ole, paikallinen tunnus poistetaan silti. */
 export async function kirjauduUlos() {
   const t = muisti.hae();
   if (t) { try { await rpc('kirjaudu_ulos', { p_tunnus: t }); } catch {} }

@@ -1,34 +1,5 @@
--- ===============================================================
---  Liinarun — tulostaulun tietokanta
---
---  Ääkköset ovat SQL:n sisällä merkkikoodeina (U&'\00e4', regexissä
---  \u00e4), jotta leikepöydän merkistö ei voi rikkoa niitä. Kommenteissa
---  ne saavat olla tavallisina.
---
---  Aja tämä tiedosto kokonaisuudessaan Supabasen SQL Editorissa
---  (liitä → Run). Tiedosto on ajettavissa uudelleen: se ei tuhoa
---  olemassa olevia pelaajia eikä tuloksia.
---
---  Periaate: peli ei koske tauluihin suoraan. Kaikki kulkee
---  palvelinfunktioiden kautta, jotka tarkistavat nimimerkin, PINin
---  ja tuloksen uskottavuuden. Pelin julkinen avain näkee vain
---  funktiot ja yhden rivin versiotaulun, jonka muuttumista
---  seuraamalla tulostaulu päivittyy reaaliajassa.
---
---  Projektin asetuksissa "Automatically expose new tables" on pois
---  päältä, joten oikeudet annetaan tässä käsin grant-lauseilla.
--- ===============================================================
-
 create extension if not exists pgcrypto with schema extensions;
 
-
--- ---------------------------------------------------------------
---  Taulut
--- ---------------------------------------------------------------
-
--- Pelaaja ja hänen paras tuloksensa. nimi_avain on nimimerkin
--- vertailumuoto: pienet kirjaimet ja välilyönnit tiivistettynä, joten
--- "Kalle" ja "kalle " ovat sama nimi.
 create table if not exists public.pelaajat (
   id          uuid primary key default gen_random_uuid(),
   nimimerkki  text not null check (char_length(nimimerkki) between 3 and 16),
@@ -38,17 +9,12 @@ create table if not exists public.pelaajat (
   luotu       timestamptz not null default now()
 );
 
--- PIN on omassa taulussaan, jotta mikään tulostaulun kysely ei voi
--- vahingossa tuoda sitä mukanaan. Tallessa on vain bcrypt-tiiviste.
 create table if not exists public.pelaaja_pin (
   pelaaja_id    uuid primary key references public.pelaajat (id) on delete cascade,
   pin_tiiviste  text not null,
   muutettu      timestamptz not null default now()
 );
 
--- Laitteen istunto. Laite saa satunnaisen tunnuksen, ja tänne
--- tallennetaan vain sen SHA-256-tiiviste. Pelaajalla voi olla monta
--- laitetta yhtä aikaa.
 create table if not exists public.istunnot (
   tunnus_tiiviste  text primary key,
   pelaaja_id       uuid not null references public.pelaajat (id) on delete cascade,
@@ -57,7 +23,6 @@ create table if not exists public.istunnot (
 );
 create index if not exists istunnot_pelaaja on public.istunnot (pelaaja_id);
 
--- Kirjautumisyritykset PINin arvaamisen hidastamiseksi.
 create table if not exists public.kirjautumisyritykset (
   id          bigserial primary key,
   nimi_avain  text not null,
@@ -67,8 +32,6 @@ create table if not exists public.kirjautumisyritykset (
 create index if not exists kirjautumisyritykset_nimi_aika
   on public.kirjautumisyritykset (nimi_avain, aika desc);
 
--- Kaikki hyväksytyt suoritukset. Tulostaulu lukee pelaajat-taulua;
--- tämä on historiaa ja väärennösten selvittelyä varten.
 create table if not exists public.tulokset (
   id          bigserial primary key,
   pelaaja_id  uuid not null references public.pelaajat (id) on delete cascade,
@@ -79,10 +42,6 @@ create table if not exists public.tulokset (
 );
 create index if not exists tulokset_pelaaja_aika on public.tulokset (pelaaja_id, luotu desc);
 
--- Kielletyt sanat nimimerkeissä. Vertailu tehdään osamerkkijonona
--- tiivistettyyn muotoon, josta on poistettu välit ja merkit ja jossa
--- numerot on muutettu kirjaimiksi (0→o, 1→i, 3→e, 4→a, 5→s, 7→t).
--- Lisää tai poista sanoja vapaasti tästä taulusta.
 create table if not exists public.kielletyt_sanat (
   sana  text primary key
 );
@@ -93,10 +52,6 @@ insert into public.kielletyt_sanat (sana) values
   ('cunt'), ('nigg'), ('bitch'), ('whore'), ('penis'), ('pussy')
 on conflict do nothing;
 
--- Jahtaajat ja niiden hinnat kolikoina. Tervis on ilmainen ja kaikilla
--- valmiiksi. Rivi, jonka saatavilla on false, näkyy kaupassa mutta sitä
--- ei voi vielä ostaa. Hinnat ja nimet voi vaihtaa ajamalla tiedoston
--- uudelleen: olemassa olevat rivit päivitetään.
 create table if not exists public.jahtaajat (
   id          text primary key,
   nimi        text not null,
@@ -113,18 +68,13 @@ insert into public.jahtaajat (id, nimi, hinta, jarjestys, saatavilla) values
 on conflict (id) do update
   set nimi = excluded.nimi, hinta = excluded.hinta,
       jarjestys = excluded.jarjestys, saatavilla = excluded.saatavilla;
--- Neljäs paikka oli 'tyhja' (Tulossa), kunnes Keittäjä-Sami valmistui.
--- Sitä ei voinut ostaa eikä valita, joten siihen ei viittaa mikään.
 delete from public.jahtaajat where id = 'tyhja';
 
--- Pelaajan tili: kolikot, varastossa olevat potkulaudat (enintään 5) ja
--- valittu jahtaaja. Lisätään sarakkeina, jotta vanhat pelaajat säilyvät.
 alter table public.pelaajat add column if not exists kolikot integer not null default 0 check (kolikot >= 0);
 alter table public.pelaajat add column if not exists potkulaudat smallint not null default 0 check (potkulaudat between 0 and 5);
 alter table public.pelaajat add column if not exists jahtaaja text not null default 'tervis' references public.jahtaajat (id);
 alter table public.tulokset add column if not exists kolikot integer not null default 0;
 
--- Ostetut jahtaajat. Ilmaisia (hinta 0) ei tarvitse ostaa.
 create table if not exists public.omistetut_jahtaajat (
   pelaaja_id  uuid not null references public.pelaajat (id) on delete cascade,
   jahtaaja    text not null references public.jahtaajat (id),
@@ -132,10 +82,6 @@ create table if not exists public.omistetut_jahtaajat (
   primary key (pelaaja_id, jahtaaja)
 );
 
--- Tulostaulun versio. Yksi rivi, jonka luku kasvaa aina kun joku
--- tulos taulussa muuttuu. Peli seuraa tätä riviä Realtimella ja hakee
--- tulostaulun uudelleen. Näin itse pelaajataulua ei tarvitse avata
--- julkiseksi lainkaan.
 create table if not exists public.tulostaulu_versio (
   id        smallint primary key default 1 check (id = 1),
   versio    bigint not null default 0,
@@ -143,15 +89,6 @@ create table if not exists public.tulostaulu_versio (
 );
 insert into public.tulostaulu_versio (id, versio) values (1, 0)
 on conflict (id) do nothing;
-
-
--- ---------------------------------------------------------------
---  Rivitason suojaus
---
---  Kaikki taulut lukitaan. Ainoa avoin reikä on versiotaulun luku.
---  Palvelinfunktiot ajetaan omistajan oikeuksin, joten ne pääsevät
---  tauluihin käsiksi lukituksesta huolimatta.
--- ---------------------------------------------------------------
 
 alter table public.pelaajat             enable row level security;
 alter table public.pelaaja_pin          enable row level security;
@@ -174,11 +111,6 @@ revoke all on public.pelaajat, public.pelaaja_pin, public.istunnot,
   from anon, authenticated;
 grant select on public.tulostaulu_versio to anon, authenticated;
 
-
--- ---------------------------------------------------------------
---  Versiotaulun päivitys
--- ---------------------------------------------------------------
-
 create or replace function public._tulostaulu_muuttui()
 returns trigger
 language plpgsql
@@ -198,12 +130,6 @@ create trigger pelaajat_tulostaulu
   after insert or delete or update of paras, nimimerkki on public.pelaajat
   for each statement execute function public._tulostaulu_muuttui();
 
-
--- ---------------------------------------------------------------
---  Sisäiset apufunktiot (eivät näy pelille)
--- ---------------------------------------------------------------
-
--- Nimimerkin vertailumuoto.
 create or replace function public._nimi_avain(p_nimi text)
 returns text
 language sql
@@ -213,7 +139,6 @@ as $$
   select lower(regexp_replace(btrim(coalesce(p_nimi, '')), '\s+', ' ', 'g'));
 $$;
 
--- Tarkistaa nimimerkin muodon ja sanat. Palauttaa siistityn nimen.
 create or replace function public._tarkista_nimi(p_nimi text)
 returns text
 language plpgsql
@@ -243,8 +168,6 @@ begin
 end;
 $$;
 
--- Luo laitteelle uuden istunnon ja palauttaa selväkielisen tunnuksen.
--- Tunnus näytetään vain kerran, tauluun menee sen tiiviste.
 create or replace function public._uusi_istunto(p_pelaaja uuid)
 returns text
 language plpgsql
@@ -261,7 +184,6 @@ begin
 end;
 $$;
 
--- Hakee pelaajan istuntotunnuksella.
 create or replace function public._pelaaja_tunnuksella(p_tunnus text)
 returns uuid
 language plpgsql
@@ -288,7 +210,6 @@ begin
 end;
 $$;
 
--- Pelaajan tili pelille: kolikot, potkulaudat ja valittu jahtaaja.
 create or replace function public._tili(p_pelaaja uuid)
 returns json
 language sql
@@ -300,7 +221,6 @@ as $$
     from public.pelaajat where id = p_pelaaja;
 $$;
 
--- Omistaako pelaaja jahtaajan: ilmaiset kaikilla, muut ostettuina.
 create or replace function public._omistaa(p_pelaaja uuid, p_jahtaaja text)
 returns boolean
 language sql
@@ -313,8 +233,6 @@ as $$
                   where pelaaja_id = p_pelaaja and jahtaaja = p_jahtaaja);
 $$;
 
--- Pelaajan sija: kuinka monella on parempi tulos, plus yksi.
--- Tasapisteissä sama sija.
 create or replace function public._sija(p_paras integer)
 returns integer
 language sql
@@ -327,15 +245,6 @@ as $$
          end;
 $$;
 
-
--- ---------------------------------------------------------------
---  Pelin käyttämät funktiot
---
---  Virheet palautetaan koodeina (esim. NIMI_VARATTU), jotka peli
---  kääntää suomenkielisiksi viesteiksi.
--- ---------------------------------------------------------------
-
--- Uuden nimimerkin varaus. Palauttaa laitteen istuntotunnuksen.
 create or replace function public.rekisteroidy(p_nimimerkki text, p_pin text)
 returns json
 language plpgsql
@@ -373,13 +282,6 @@ begin
 end;
 $$;
 
--- Kirjautuminen olemassa olevaan nimimerkkiin uudella laitteella.
--- Viisi väärää yritystä 15 minuutissa lukitsee nimimerkin
--- kirjautumisen 15 minuutiksi.
---
--- Väärä PIN palautetaan {"virhe": ...}-vastauksena eikä poikkeuksena.
--- Poikkeus peruisi koko transaktion, jolloin epäonnistunut yritys ei
--- tallentuisi ja arvauslaskuri ei koskaan kasvaisi.
 create or replace function public.kirjaudu(p_nimimerkki text, p_pin text)
 returns json
 language plpgsql
@@ -412,7 +314,6 @@ begin
   values (v_avain, v_oikein);
 
   if not v_oikein then
-    -- Sama viesti väärälle nimelle ja väärälle PINille.
     return json_build_object('virhe', 'VIRHEELLINEN_TUNNUS');
   end if;
 
@@ -425,8 +326,6 @@ begin
 end;
 $$;
 
--- Laitteen oma tila: nimimerkki, ennätys ja sija. Kutsutaan kun peli
--- avataan ja laitteella on jo tunnus.
 create or replace function public.oma_tila(p_tunnus text)
 returns json
 language plpgsql
@@ -447,26 +346,16 @@ begin
 end;
 $$;
 
--- Suorituksen tallennus. Tarkistaa uskottavuuden, päivittää ennätyksen,
--- lisää juoksun kolikot tilille ja päivittää potkulautavaraston.
---
--- Tulos on juostu matka metreinä: pisteitä ei lasketa erikseen, joten
--- p_pisteet otetaan vastaan vain vanhojen versioiden vuoksi eikä sitä
--- käytetä mihinkään.
---
--- Rajat tulevat pelin fysiikasta:
---   vauhti on enintään 31 m/s, NOCCO-boostilla hetkellisesti 1,5-kertainen;
---   tölkkejä on korkeintaan noin kolmannes ajasta → matka ≤ kesto × 40 + 10
---   kolikko viiden metrin välein,
---   boostilla kaksinkertaisena         → kolikot ≤ matka × 0,4 + 20
---   potkulauta noin 140 m välein       → kerätyt laudat ≤ matka / 130 + 2
--- Käytettyjä lautoja ei voi olla enempää kuin varastossa oli ja juoksulla
--- kerättiin. Varastoon jää enintään viisi. Kahden tallennuksen välissä on
--- oltava vähintään 1,5 s.
---
--- Vanha neliparametrinen versio poistetaan, jotta kutsu ei ole
--- kaksiselitteinen; uudet parametrit ovat valinnaisia.
 drop function if exists public.tallenna_tulos(text, integer, integer, numeric);
+create or replace function public._tulostaulu_suljettu()
+returns boolean
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select now() >= (timestamp '2026-11-20 12:00:00' at time zone 'Europe/Helsinki');
+$$;
+
 create or replace function public.tallenna_tulos(
   p_tunnus          text,
   p_pisteet         integer,
@@ -487,6 +376,7 @@ declare
   v_rivi      record;
   v_uusi      boolean;
   v_paras     integer;
+  v_suljettu  boolean;
 begin
   if p_matka is null or p_kesto is null
      or p_matka   < 0 or p_matka   > 1000000
@@ -513,33 +403,31 @@ begin
   insert into public.tulokset (pelaaja_id, pisteet, matka, kesto, kolikot)
   values (v_pelaaja, p_matka, p_matka, p_kesto, coalesce(p_kolikot, 0));
 
-  v_uusi := p_matka > v_rivi.paras;
+  v_suljettu := public._tulostaulu_suljettu();
+  v_uusi := p_matka > v_rivi.paras and not v_suljettu;
 
   update public.pelaajat
      set kolikot     = kolikot + coalesce(p_kolikot, 0),
          potkulaudat = least(5, potkulaudat + coalesce(p_laudat_keratyt, 0) - coalesce(p_laudat_kaytetyt, 0))
    where id = v_pelaaja;
 
-  -- Ennätys omana päivityksenään, jotta tulostaulun versio kasvaa vain
-  -- silloin kun ennätys oikeasti muuttuu.
   if v_uusi then
     update public.pelaajat
        set paras = p_matka, paras_aika = now()
      where id = v_pelaaja;
   end if;
 
-  v_paras := greatest(v_rivi.paras, p_matka);
+  v_paras := case when v_uusi then p_matka else v_rivi.paras end;
   return (json_build_object(
     'uusi_ennatys', v_uusi,
     'edellinen',    v_rivi.paras,
     'paras',        v_paras,
-    'sija',         public._sija(v_paras)
+    'sija',         public._sija(v_paras),
+    'tulostaulu_suljettu', v_suljettu
   )::jsonb || public._tili(v_pelaaja)::jsonb)::json;
 end;
 $$;
 
--- Kaupan tiedot: tili ja kaikki jahtaajat järjestyksessä, tieto siitä
--- mitkä pelaaja omistaa.
 create or replace function public.kauppa(p_tunnus text)
 returns json
 language plpgsql
@@ -559,10 +447,6 @@ begin
 end;
 $$;
 
--- Jahtaajan osto. Saldo tarkistetaan ja veloitetaan samassa
--- transaktiossa lukitun pelaajarivin kanssa, joten samaa kolikkoa ei voi
--- käyttää kahdesti. Ostettu jahtaaja valitaan samalla.
--- Virheet palautetaan {"virhe": ...}-vastauksena.
 create or replace function public.osta_jahtaaja(p_tunnus text, p_jahtaaja text)
 returns json
 language plpgsql
@@ -598,7 +482,6 @@ begin
 end;
 $$;
 
--- Jahtaajan valinta omistettujen joukosta.
 create or replace function public.valitse_jahtaaja(p_tunnus text, p_jahtaaja text)
 returns json
 language plpgsql
@@ -617,10 +500,6 @@ begin
 end;
 $$;
 
--- Tulostaulu: kärki 10 ja pyytäjän oma rivi, jos se jää kärjen
--- ulkopuolelle. Tasapisteissä sama sija, ja aiemmin saavutettu tulos
--- listataan ensin. Tunnus on vapaaehtoinen: ilman sitä palautetaan
--- pelkkä kärki.
 create or replace function public.tulostaulu(p_tunnus text default null)
 returns table (sija integer, nimimerkki text, paras integer, oma boolean)
 language plpgsql
@@ -657,11 +536,6 @@ begin
 end;
 $$;
 
-
--- Juoksun etapit: muiden pelaajien tulokset sijoilla 50, 25, 10, 5, 3, 2
--- ja 1 sekä oma ennätys. Oma rivi jätetään pois, jotta sijan N raja on
--- se tulos, jonka ylittämällä pelaaja nousee sijalle N. Nimimerkit
--- näytetään juoksun aikana ohitettavina.
 create or replace function public.tavoitteet(p_tunnus text)
 returns json
 language plpgsql
@@ -690,8 +564,6 @@ begin
 end;
 $$;
 
--- Uloskirjautuminen: poistaa tämän laitteen istunnon, jolloin laitteelle
--- jäänyt tunnus ei enää kelpaa. Muiden laitteiden istunnot säilyvät.
 create or replace function public.kirjaudu_ulos(p_tunnus text)
 returns json
 language plpgsql
@@ -707,17 +579,6 @@ begin
   return json_build_object('ok', true);
 end;
 $$;
-
-
--- ---------------------------------------------------------------
---  Ylläpito (vain SQL Editorista, ei pelille)
---
---  Unohtunut PIN:
---    select public.nollaa_pin('Nimimerkki', '1234');
---
---  Pelaajan poisto (poistaa myös tulokset ja istunnot):
---    delete from public.pelaajat where nimi_avain = lower('Nimimerkki');
--- ---------------------------------------------------------------
 
 create or replace function public.nollaa_pin(p_nimimerkki text, p_uusi_pin text)
 returns text
@@ -747,20 +608,13 @@ begin
 end;
 $$;
 
-
--- ---------------------------------------------------------------
---  Funktioiden oikeudet
---
---  PostgreSQL antaa funktioille oletuksena suoritusoikeuden kaikille,
---  joten kaikki suljetaan ensin ja pelille avataan vain tarvittavat.
--- ---------------------------------------------------------------
-
 revoke all on function public._tulostaulu_muuttui()          from public, anon, authenticated;
 revoke all on function public._nimi_avain(text)              from public, anon, authenticated;
 revoke all on function public._tarkista_nimi(text)           from public, anon, authenticated;
 revoke all on function public._uusi_istunto(uuid)            from public, anon, authenticated;
 revoke all on function public._pelaaja_tunnuksella(text)     from public, anon, authenticated;
 revoke all on function public._sija(integer)                 from public, anon, authenticated;
+revoke all on function public._tulostaulu_suljettu()          from public, anon, authenticated;
 revoke all on function public._tili(uuid)                    from public, anon, authenticated;
 revoke all on function public._omistaa(uuid, text)           from public, anon, authenticated;
 revoke all on function public.nollaa_pin(text, text)         from public, anon, authenticated;
@@ -786,11 +640,6 @@ grant execute on function public.valitse_jahtaaja(text, text)   to anon, authent
 grant execute on function public.tulostaulu(text)               to anon, authenticated;
 grant execute on function public.kirjaudu_ulos(text)            to anon, authenticated;
 
-
--- ---------------------------------------------------------------
---  Reaaliaikaisuus: versiotaulu Realtime-julkaisuun
--- ---------------------------------------------------------------
-
 do $$
 begin
   if not exists (
@@ -803,17 +652,6 @@ begin
   end if;
 end;
 $$;
-
-
--- ---------------------------------------------------------------
---  Pisteet = metrit (syyskuu 2026)
---
---  Aiemmin pisteitä kertyi metreistä, kolikoista, tölkeistä ja
---  laudoista. Nyt tulos on pelkkä matka. Jokaisen ennätykseksi lasketaan
---  hänen pisin hyväksytty juoksunsa, ja ennätyksen ajaksi sen juoksun
---  aika. Uudelleen ajettaessa tulos on sama, koska uudet ennätykset ovat
---  jo metrejä.
--- ---------------------------------------------------------------
 
 update public.pelaajat p
    set paras = t.matka, paras_aika = t.luotu
